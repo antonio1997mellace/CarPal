@@ -152,8 +152,7 @@ fun PillTabs(
                     .selectable(selected = sel, role = Role.Tab, onClick = { onSelect(i) }),
                 Alignment.Center,
             ) {
-                // five tabs only fit a narrow phone in the smaller size
-                Text(t, color = if (sel) Color.White else Muted, style = if (tabs.size > 4) MaterialTheme.typography.labelMedium else MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                Text(t, color = if (sel) Color.White else Muted, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, maxLines = 1)
             }
         }
     }

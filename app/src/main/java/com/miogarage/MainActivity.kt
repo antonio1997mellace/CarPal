@@ -9,6 +9,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -20,6 +21,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Settings
@@ -221,6 +223,8 @@ private fun VehicleFormScreen(dao: GarageDao, existing: Vehicle?, onDone: () -> 
 
 // ---------- Vehicle detail ----------
 
+private val SECTIONS = listOf("Scadenze", "Rifornimenti", "Spese", "Documenti")
+
 @Composable
 private fun VehicleDetail(dao: GarageDao, id: Long, onBack: () -> Unit, onEdit: (Vehicle) -> Unit) {
     val vehicle by remember(id) { dao.vehicle(id) }.collectAsState(null)
@@ -231,13 +235,13 @@ private fun VehicleDetail(dao: GarageDao, id: Long, onBack: () -> Unit, onEdit: 
     var adding by remember { mutableStateOf(false) }
     val v = vehicle ?: return
     val lastKm = fuel.maxOfOrNull { it.km } ?: v.km
+    // the summary is the landing page: back from a section returns to it, not to the garage
+    BackHandler(tab != 0) { tab = 0 }
 
     Scaffold(
         topBar = {
-            Column {
-                TopBar("${v.marca} ${v.modello}".trim(), onBack) { IconButton({ onEdit(v) }) { Icon(Icons.Default.Edit, "Modifica veicolo") } }
-                PillTabs(listOf("Riepilogo", "Scadenze", "Rifornimenti", "Spese", "Documenti"), tab) { tab = it }
-            }
+            if (tab == 0) TopBar("${v.marca} ${v.modello}".trim(), onBack) { IconButton({ onEdit(v) }) { Icon(Icons.Default.Edit, "Modifica veicolo") } }
+            else TopBar(SECTIONS[tab - 1], { tab = 0 })
         },
         floatingActionButton = { if (tab in 1..3) AddFab(listOf("Scadenza", "Rifornimento", "Spesa")[tab - 1]) { adding = true } },
     ) { pad ->
@@ -280,6 +284,21 @@ private fun Summary(v: Vehicle, deadlines: List<Deadline>, fuel: List<FuelEntry>
                     }
                 }
                 Plate(v.targa)
+            }
+        }
+
+        val dots = listOf(Warn, Accent, Violet, Good)
+        SECTIONS.indices.chunked(2).forEach { pair ->
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                pair.forEach { i ->
+                    Surface({ goTo(i + 1) }, Modifier.weight(1f).height(52.dp), shape = RoundedCornerShape(16.dp), color = Surface1, border = BorderStroke(1.dp, Line)) {
+                        Row(Modifier.padding(start = 14.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Dot(dots[i])
+                            Text(SECTIONS[i], Modifier.weight(1f).padding(start = 10.dp), fontWeight = FontWeight.SemiBold, maxLines = 1)
+                            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = Muted)
+                        }
+                    }
+                }
             }
         }
 
