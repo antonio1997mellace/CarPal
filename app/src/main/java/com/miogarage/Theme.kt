@@ -38,25 +38,27 @@ var isDark by mutableStateOf(true)
 
 private fun pick(dark: Long, light: Long) = Color(if (isDark) dark else light)
 
-val Bg get() = pick(0xFF0A0D12, 0xFFF3F5F9)
-val Surface1 get() = pick(0xFF131821, 0xFFFFFFFF)
-val Surface2 get() = pick(0xFF1B2230, 0xFFE8ECF3)
-val Line get() = pick(0xFF263043, 0xFFDCE2EC)
-val Ink get() = pick(0xFFEEF2F8, 0xFF10141C)
-val Muted get() = pick(0xFF8B97AB, 0xFF5D6878)
-val Accent get() = pick(0xFF4F8CFF, 0xFF2F6BF0)
-val Violet get() = pick(0xFFA78BFA, 0xFF7C5CE0)
+// Black, greys and one orange accent.
+val Bg get() = pick(0xFF000000, 0xFFF4F4F5)
+val Surface1 get() = pick(0xFF121213, 0xFFFFFFFF)
+val Surface2 get() = pick(0xFF1E1E20, 0xFFE9E9EB)
+val Line get() = pick(0xFF262628, 0xFFDEDEE1)
+val Ink get() = pick(0xFFF5F5F7, 0xFF111112)
+val Muted get() = pick(0xFF8E8E93, 0xFF636368)
+val Accent get() = pick(0xFFFF7A1A, 0xFFC4530A)
+val OnAccent get() = pick(0xFF111112, 0xFFFFFFFF) // dark text on the bright orange, white on the deeper light-theme one
+val Steel get() = pick(0xFFA1A1A6, 0xFF8A8A8F) // neutral second series next to the accent
 val Good get() = pick(0xFF3DDC97, 0xFF12905A)
 val Warn get() = pick(0xFFFFC53D, 0xFFA86A00)
 val Bad get() = pick(0xFFFF5C6C, 0xFFD43A4A)
 
-// Status colours for text on the blue hero card, which is dark in both themes.
+// Status colours for text on the hero card, which is dark in both themes.
 val HeroGood = Color(0xFF3DDC97)
 val HeroWarn = Color(0xFFFFC53D)
 val HeroBad = Color(0xFFFF8A95)
 
 fun categoryColor(categoria: String): Color {
-    val colors = listOf(Accent, Violet, pick(0xFF2DD4BF, 0xFF0F9488), pick(0xFFFF8A4C, 0xFFD9601A), pick(0xFFF472B6, 0xFFD23A8C), pick(0xFF38BDF8, 0xFF0C86C4))
+    val colors = listOf(Accent, Steel, pick(0xFFFFB866, 0xFFA85F00), pick(0xFFD1D1D6, 0xFF48484C))
     return colors[EXPENSE_CATEGORIES.indexOf(categoria).mod(colors.size)]
 }
 
@@ -67,17 +69,17 @@ fun Status.color() = when (this) {
 }
 
 private fun scheme() = (if (isDark) darkColorScheme() else lightColorScheme()).copy(
-    primary = Accent, onPrimary = Color.White,
-    primaryContainer = pick(0xFF1C3466, 0xFFDCE7FF), onPrimaryContainer = pick(0xFFDCE7FF, 0xFF0F2A66),
-    secondary = Accent, onSecondary = Color.White,
-    secondaryContainer = pick(0xFF1C3466, 0xFFDCE7FF), onSecondaryContainer = pick(0xFFDCE7FF, 0xFF0F2A66),
-    tertiary = Violet,
+    primary = Accent, onPrimary = OnAccent,
+    primaryContainer = pick(0xFF3D2410, 0xFFFFE2CC), onPrimaryContainer = pick(0xFFFFDCC2, 0xFF5A2600),
+    secondary = Accent, onSecondary = OnAccent,
+    secondaryContainer = pick(0xFF3D2410, 0xFFFFE2CC), onSecondaryContainer = pick(0xFFFFDCC2, 0xFF5A2600),
+    tertiary = Steel,
     background = Bg, onBackground = Ink,
     surface = Bg, onSurface = Ink,
     surfaceVariant = Surface2, onSurfaceVariant = Muted,
     surfaceContainerLowest = Bg, surfaceContainerLow = Surface1, surfaceContainer = Surface1,
-    surfaceContainerHigh = pick(0xFF1B2230, 0xFFFFFFFF), surfaceContainerHighest = Surface2,
-    outline = pick(0xFF3A465C, 0xFFB4BDCC), outlineVariant = Line,
+    surfaceContainerHigh = pick(0xFF1E1E20, 0xFFFFFFFF), surfaceContainerHighest = Surface2,
+    outline = pick(0xFF3A3A3D, 0xFFB9B9BE), outlineVariant = Line,
     error = Bad, onError = Color.White,
 )
 
@@ -104,13 +106,16 @@ fun Panel(modifier: Modifier = Modifier, onClick: (() -> Unit)? = null, content:
     ) { Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp), content = content) }
 }
 
-/** Blue gradient card used for the vehicle itself. */
+/** Graphite card with an orange glow, used for the vehicle itself; dark in both themes. */
 @Composable
 fun Hero(onClick: (() -> Unit)? = null, content: @Composable ColumnScope.() -> Unit) {
     Column(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp))
-            .background(Brush.linearGradient(listOf(Color(0xFF3B6CF6), Color(0xFF16254D))))
-            .drawBehind { drawCircle(Color.White.copy(alpha = 0.07f), radius = size.height * 0.9f, center = Offset(size.width, 0f)) }
+            .background(Brush.linearGradient(listOf(Color(0xFF2C2C2F), Color(0xFF111112))))
+            .drawBehind {
+                val c = Offset(size.width, 0f)
+                drawCircle(Brush.radialGradient(listOf(Color(0x59FF7A1A), Color.Transparent), c, size.height * 1.2f), size.height * 1.2f, c)
+            }
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
             .padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp), content = content,
@@ -152,7 +157,7 @@ fun PillTabs(
                     .selectable(selected = sel, role = Role.Tab, onClick = { onSelect(i) }),
                 Alignment.Center,
             ) {
-                Text(t, color = if (sel) Color.White else Muted, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                Text(t, color = if (sel) OnAccent else Muted, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, maxLines = 1)
             }
         }
     }
@@ -166,7 +171,7 @@ fun Dot(color: Color) = Box(Modifier.size(10.dp).clip(CircleShape).background(co
 fun SplitBar(a: Double, b: Double) {
     Row(Modifier.fillMaxWidth().height(10.dp).clip(CircleShape).background(Surface2)) {
         if (a > 0) Box(Modifier.weight(a.toFloat()).fillMaxHeight().background(Accent))
-        if (b > 0) Box(Modifier.weight(b.toFloat()).fillMaxHeight().background(Violet))
+        if (b > 0) Box(Modifier.weight(b.toFloat()).fillMaxHeight().background(Steel))
     }
 }
 

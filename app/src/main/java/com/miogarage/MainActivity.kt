@@ -287,13 +287,12 @@ private fun Summary(v: Vehicle, deadlines: List<Deadline>, fuel: List<FuelEntry>
             }
         }
 
-        val dots = listOf(Warn, Accent, Violet, Good)
         SECTIONS.indices.chunked(2).forEach { pair ->
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 pair.forEach { i ->
                     Surface({ goTo(i + 1) }, Modifier.weight(1f).height(52.dp), shape = RoundedCornerShape(16.dp), color = Surface1, border = BorderStroke(1.dp, Line)) {
                         Row(Modifier.padding(start = 14.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Dot(dots[i])
+                            Dot(Accent)
                             Text(SECTIONS[i], Modifier.weight(1f).padding(start = 10.dp), fontWeight = FontWeight.SemiBold, maxLines = 1)
                             Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = Muted)
                         }
@@ -335,7 +334,7 @@ private fun Summary(v: Vehicle, deadlines: List<Deadline>, fuel: List<FuelEntry>
             SplitBar(fuelCost, otherCost)
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Legend(Modifier.weight(1f), Accent, "Carburante", fuelCost)
-                Legend(Modifier.weight(1f), Violet, "Altro", otherCost)
+                Legend(Modifier.weight(1f), Steel, "Altro", otherCost)
             }
         }
     }
@@ -527,7 +526,7 @@ fun TopBar(title: String, onBack: () -> Unit, actions: @Composable RowScope.() -
 private fun AddFab(text: String, onClick: () -> Unit) {
     ExtendedFloatingActionButton(
         onClick = onClick, icon = { Icon(Icons.Default.Add, null) }, text = { Text(text, fontWeight = FontWeight.SemiBold) },
-        containerColor = Accent, contentColor = Color.White, shape = CircleShape,
+        containerColor = Accent, contentColor = OnAccent, shape = CircleShape,
     )
 }
 
