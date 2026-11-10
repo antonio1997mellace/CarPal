@@ -46,6 +46,15 @@ class StatsTest {
         assertNull(costPerKm(v, emptyList(), emptyList()))
     }
 
+    @Test fun kmDrivenSinceLastReadingBeforePeriod() {
+        val f = listOf(FuelEntry(0, 1, 100, 40.0, 50.0, 11_000), FuelEntry(0, 1, 200, 40.0, 50.0, 12_500))
+        val e = listOf(Expense(0, 1, 150, "Gomme", 340.0, 11_800, ""), Expense(0, 1, 160, "Multa", 40.0, null, ""))
+        assertEquals(2_500, kmDriven(v, f, e, Long.MIN_VALUE)) // whole history: from the km at registration
+        assertEquals(700, kmDriven(v, f, e, 180)) // last reading before day 180 is the tyre change
+        assertEquals(0, kmDriven(v, f, e, 300)) // nothing recorded in the period
+        assertEquals(listOf(12_500, 11_800, 11_000), kmReadings(f, e).map { it.km })
+    }
+
     @Test fun parsesItalianDecimals() {
         assertEquals(1.5, parseNum(" 1,5 ")!!, 1e-9)
         assertNull(parseNum("abc"))

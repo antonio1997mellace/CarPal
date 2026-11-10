@@ -224,7 +224,10 @@ private fun VehicleFormScreen(dao: GarageDao, existing: Vehicle?, onDone: () -> 
 
 // ---------- Vehicle detail ----------
 
-private val SECTIONS = listOf("Scadenze", "Rifornimenti", "Spese", "Documenti")
+private val SECTIONS = listOf("Scadenze", "Rifornimenti", "Spese", "Documenti", "Chilometri") // the last one opens from the odometer, not from a tile
+private val PERIODS = listOf("Sempre", "Settimana", "Mese", "Anno")
+// rolling periods ending today, so a figure is never empty on the 1st of the month
+private fun periodStart(period: Int, today: Long) = listOf(Long.MIN_VALUE, today - 6, today - 29, today - 364)[period]
 private val SECTION_ICONS = listOf(R.drawable.ic_scadenze, R.drawable.ic_rifornimenti, R.drawable.ic_spese, R.drawable.ic_documenti)
 
 @Composable
@@ -254,6 +257,7 @@ private fun VehicleDetail(dao: GarageDao, id: Long, onBack: () -> Unit, onEdit: 
                 2 -> FuelList(dao, fuel)
                 3 -> ExpenseList(dao, expenses)
                 4 -> Documents(v.id)
+                5 -> KmHistory(v, fuel, expenses)
             }
         }
     }
@@ -270,15 +274,14 @@ private fun Summary(v: Vehicle, deadlines: List<Deadline>, fuel: List<FuelEntry>
     val today = today()
     val series = remember(fuel) { consumptionSeries(fuel).map { it.second }.takeLast(12) }
     val avg = avgKmPerLiter(fuel)
-    // cost filter: rolling periods ending today, so the figure is never empty on the 1st of the month
     var period by rememberSaveable { mutableIntStateOf(0) }
-    val from = listOf(Long.MIN_VALUE, today - 6, today - 29, today - 364)[period]
+    val from = periodStart(period, today)
     val fuelCost = fuel.filter { it.data >= from }.sumOf { it.importo }
     val otherCost = expenses.filter { it.data >= from }.sumOf { it.importo }
     Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp, 4.dp, 16.dp, 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Hero { Odometer(currentKm(v, fuel, expenses), v.targa, Modifier.align(Alignment.CenterHorizontally)) }
+        Hero(onClick = { goTo(5) }) { Odometer(currentKm(v, fuel, expenses), v.targa, Modifier.align(Alignment.CenterHorizontally)) }
 
-        SECTIONS.indices.chunked(2).forEach { pair ->
+        SECTION_ICONS.indices.chunked(2).forEach { pair ->
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 pair.forEach { i ->
                     Surface({ goTo(i + 1) }, Modifier.weight(1f).height(52.dp), shape = RoundedCornerShape(16.dp), color = Surface1, border = BorderStroke(1.dp, Line)) {
@@ -316,7 +319,7 @@ private fun Summary(v: Vehicle, deadlines: List<Deadline>, fuel: List<FuelEntry>
 
         Panel(onClick = { goTo(3) }) {
             SectionTitle(listOf("Costo totale", "Costo degli ultimi 7 giorni", "Costo degli ultimi 30 giorni", "Costo degli ultimi 12 mesi")[period])
-            PillTabs(listOf("Sempre", "Settimana", "Mese", "Anno"), period, Modifier, Surface2, 36.dp) { period = it }
+            PillTabs(PERIODS, period, Modifier, Surface2, 36.dp) { period = it }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text((fuelCost + otherCost).eur(), Modifier.weight(1f), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold)
                 // €/km needs the km driven, which is only known over the whole history
@@ -326,6 +329,44 @@ private fun Summary(v: Vehicle, deadlines: List<Deadline>, fuel: List<FuelEntry>
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Legend(Modifier.weight(1f), Accent, "Carburante", fuelCost)
                 Legend(Modifier.weight(1f), Steel, "Altro", otherCost)
+            }
+        }
+    }
+}
+
+@Composable
+private fun KmHistory(v: Vehicle, fuel: List<FuelEntry>, expenses: List<Expense>) {
+    var period by rememberSaveable { mutableIntStateOf(0) }
+    val readings = remember(fuel, expenses) { kmReadings(fuel, expenses) }
+    LazyColumn(contentPadding = PaddingValues(16.dp, 4.dp, 16.dp, 24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        item {
+            Panel {
+                SectionTitle(listOf("Km percorsi in totale", "Km percorsi negli ultimi 7 giorni", "Km percorsi negli ultimi 30 giorni", "Km percorsi negli ultimi 12 mesi")[period])
+                PillTabs(PERIODS, period, Modifier, Surface2, 36.dp) { period = it }
+                Text("${kmDriven(v, fuel, expenses, periodStart(period, today())).km()} km", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold)
+                Text("Calcolati dai km che inserisci in rifornimenti e spese.", color = Muted, style = MaterialTheme.typography.bodySmall)
+            }
+        }
+        item { SectionTitle("Cronologia") }
+        items(readings.size) { i ->
+            val r = readings[i]
+            KmRow(r.data.date(), r.fonte, r.km, r.km - (readings.getOrNull(i + 1)?.km ?: v.km))
+        }
+        item { KmRow("Inizio", "Registrazione del veicolo", v.km, null) }
+    }
+}
+
+@Composable
+private fun KmRow(date: String, source: String, km: Int, delta: Int?) {
+    Panel {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(date, fontWeight = FontWeight.SemiBold)
+                Text(source, color = Muted, style = MaterialTheme.typography.bodySmall)
+            }
+            Column(horizontalAlignment = Alignment.End) {
+                Text("${km.km()} km", fontWeight = FontWeight.SemiBold)
+                if (delta != null && delta > 0) Text("+${delta.km()} km", color = Accent, style = MaterialTheme.typography.bodySmall)
             }
         }
     }

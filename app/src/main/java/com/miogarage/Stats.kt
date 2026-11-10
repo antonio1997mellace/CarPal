@@ -25,6 +25,20 @@ fun avgKmPerLiter(fuel: List<FuelEntry>): Double? {
 fun currentKm(v: Vehicle, fuel: List<FuelEntry>, expenses: List<Expense>) =
     maxOf(v.km, fuel.maxOfOrNull { it.km } ?: 0, expenses.maxOfOrNull { it.km ?: 0 } ?: 0)
 
+/** A dated odometer reading and where it came from. */
+data class KmReading(val data: Long, val km: Int, val fonte: String)
+
+/** Every refuel, and every expense that recorded the km, newest first. */
+fun kmReadings(fuel: List<FuelEntry>, expenses: List<Expense>): List<KmReading> =
+    (fuel.map { KmReading(it.data, it.km, "Rifornimento") } + expenses.mapNotNull { e -> e.km?.let { KmReading(e.data, it, e.categoria) } })
+        .sortedWith(compareByDescending<KmReading> { it.data }.thenByDescending { it.km })
+
+/** Km driven since day [from]: current km minus the last reading before that day (the km at registration when there is none). */
+fun kmDriven(v: Vehicle, fuel: List<FuelEntry>, expenses: List<Expense>, from: Long): Int {
+    val start = kmReadings(fuel, expenses).filter { it.data < from }.maxOfOrNull { it.km } ?: v.km
+    return (currentKm(v, fuel, expenses) - start).coerceAtLeast(0)
+}
+
 fun totalCost(fuel: List<FuelEntry>, expenses: List<Expense>) = fuel.sumOf { it.importo } + expenses.sumOf { it.importo }
 
 fun costPerKm(v: Vehicle, fuel: List<FuelEntry>, expenses: List<Expense>): Double? {
