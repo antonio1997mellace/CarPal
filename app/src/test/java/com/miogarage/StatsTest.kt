@@ -21,6 +21,14 @@ class StatsTest {
         assertEquals(listOf(10_500, 11_000), s.map { it.first.km })
     }
 
+    @Test fun packsLongWithShort() {
+        // in order these would take 4 rows (70 | 30+60 | 40 | 90); packed they take 3
+        val rows = packRows(listOf(70, 30, 60, 40, 90), max = 100, gap = 0)
+        assertEquals(listOf(listOf(4), listOf(0, 1), listOf(2, 3)), rows)
+        // the gap counts, and an item wider than the row still gets its own row
+        assertEquals(listOf(listOf(0), listOf(1), listOf(2)), packRows(listOf(150, 50, 50), max = 100, gap = 1))
+    }
+
     @Test fun deadlineStatus() {
         val d = Deadline(0, 1, "Bollo", 100)
         assertEquals(Status.EXPIRED, status(d, 101))

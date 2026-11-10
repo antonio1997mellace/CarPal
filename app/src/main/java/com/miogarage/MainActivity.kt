@@ -30,6 +30,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -256,8 +258,11 @@ private fun Summary(v: Vehicle, deadlines: List<Deadline>, fuel: List<FuelEntry>
     val today = today()
     val series = remember(fuel) { consumptionSeries(fuel).map { it.second }.takeLast(12) }
     val avg = avgKmPerLiter(fuel)
-    val fuelCost = fuel.sumOf { it.importo }
-    val otherCost = expenses.sumOf { it.importo }
+    // cost filter: rolling periods ending today, so the figure is never empty on the 1st of the month
+    var period by rememberSaveable { mutableIntStateOf(0) }
+    val from = listOf(Long.MIN_VALUE, today - 6, today - 29, today - 364)[period]
+    val fuelCost = fuel.filter { it.data >= from }.sumOf { it.importo }
+    val otherCost = expenses.filter { it.data >= from }.sumOf { it.importo }
     Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp, 4.dp, 16.dp, 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Hero {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -295,10 +300,12 @@ private fun Summary(v: Vehicle, deadlines: List<Deadline>, fuel: List<FuelEntry>
         }
 
         Panel(onClick = { goTo(3) }) {
-            SectionTitle("Costo totale")
+            SectionTitle(listOf("Costo totale", "Costo degli ultimi 7 giorni", "Costo degli ultimi 30 giorni", "Costo degli ultimi 12 mesi")[period])
+            PillTabs(listOf("Sempre", "Settimana", "Mese", "Anno"), period, Modifier, Surface2, 36.dp) { period = it }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text((fuelCost + otherCost).eur(), Modifier.weight(1f), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold)
-                costPerKm(v, fuel, expenses)?.let { Pill("${it.dec(3)} €/km", Accent) }
+                // €/km needs the km driven, which is only known over the whole history
+                if (period == 0) costPerKm(v, fuel, expenses)?.let { Pill("${it.dec(3)} €/km", Accent) }
             }
             SplitBar(fuelCost, otherCost)
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -529,12 +536,24 @@ private fun Field(value: String, onChange: (String) -> Unit, label: String, type
     )
 }
 
-/** Wrapping grid of choices: every option is visible at once, no sideways scrolling. */
-@OptIn(ExperimentalLayoutApi::class)
+/** Wrapping grid of choices, packed so long and short labels share rows and the grid takes the fewest rows. */
 @Composable
 fun Chips(options: List<String>, selected: String, onSelect: (String) -> Unit) {
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+    val gap = with(LocalDensity.current) { 6.dp.roundToPx() }
+    Layout(content = {
         options.forEach { FilterChip(it == selected, { onSelect(it) }, label = { Text(it) }, shape = CircleShape) }
+    }) { measurables, constraints ->
+        val chips = measurables.map { it.measure(constraints.copy(minWidth = 0, minHeight = 0)) }
+        val rows = packRows(chips.map { it.width }, constraints.maxWidth, gap)
+        val heights = rows.map { row -> row.maxOf { chips[it].height } }
+        layout(constraints.maxWidth, heights.sum()) {
+            var y = 0
+            rows.forEachIndexed { r, row ->
+                var x = 0
+                row.forEach { chips[it].placeRelative(x, y); x += chips[it].width + gap }
+                y += heights[r]
+            }
+        }
     }
 }
 

@@ -41,3 +41,23 @@ fun consumptionSeries(fuel: List<FuelEntry>): List<Pair<FuelEntry, Double>> =
         val km = cur.km - prev.km
         if (km > 0 && cur.litri > 0) cur to km / cur.litri else null
     }
+
+/**
+ * Packs items of the given widths into the fewest rows of width `max` (first-fit, widest first),
+ * so long and short labels end up sharing a row. Returns the item indices of each row.
+ */
+fun packRows(widths: List<Int>, max: Int, gap: Int): List<List<Int>> {
+    val rows = mutableListOf<MutableList<Int>>()
+    val used = mutableListOf<Int>()
+    widths.indices.sortedByDescending { widths[it] }.forEach { i ->
+        val r = used.indices.firstOrNull { used[it] + gap + widths[i] <= max }
+        if (r == null) {
+            rows += mutableListOf(i)
+            used += widths[i]
+        } else {
+            rows[r] += i
+            used[r] += gap + widths[i]
+        }
+    }
+    return rows
+}

@@ -28,6 +28,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
@@ -138,13 +139,16 @@ fun Pill(text: String, color: Color, container: Color = color.copy(alpha = 0.14f
 }
 
 @Composable
-fun PillTabs(tabs: List<String>, selected: Int, onSelect: (Int) -> Unit) {
-    Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp).fillMaxWidth().clip(CircleShape).background(Surface1).padding(4.dp)) {
+fun PillTabs(
+    tabs: List<String>, selected: Int, modifier: Modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+    container: Color = Surface1, height: Dp = 44.dp, onSelect: (Int) -> Unit,
+) {
+    Row(modifier.fillMaxWidth().clip(CircleShape).background(container).padding(4.dp)) {
         tabs.forEachIndexed { i, t ->
             val sel = i == selected
             Box(
                 // width follows label length, so "Rifornimenti" fits next to "Spese" on narrow phones
-                Modifier.weight(t.length + 3f).height(44.dp).clip(CircleShape).background(if (sel) Accent else Color.Transparent)
+                Modifier.weight(t.length + 3f).height(height).clip(CircleShape).background(if (sel) Accent else Color.Transparent)
                     .selectable(selected = sel, role = Role.Tab, onClick = { onSelect(i) }),
                 Alignment.Center,
             ) {
