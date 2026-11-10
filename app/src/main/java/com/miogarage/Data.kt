@@ -47,8 +47,15 @@ data class Expense(
     val note: String,
 )
 
-val DEADLINE_TYPES = listOf("Bollo", "Revisione", "Assicurazione", "Tagliando", "Altro")
-val EXPENSE_CATEGORIES = listOf("Tagliando", "Gomme", "Riparazione", "Lavaggio", "Bollo", "Assicurazione", "Pedaggio", "Parcheggio", "Altro")
+val DEADLINE_TYPES = listOf(
+    "Bollo", "Assicurazione", "Revisione", "Tagliando", "Cambio gomme", "Rinnovo patente", "Garanzia",
+    "Rata finanziamento", "Revisione bombole", "Soccorso stradale", "Altro",
+)
+// Bollo, Assicurazione, Tagliando and Revisione are in both lists on purpose: a deadline says when, an expense says how much.
+val EXPENSE_CATEGORIES = listOf(
+    "Riparazione", "Tagliando", "Gomme", "Carrozzeria", "Ricambi", "Accessori", "Lavaggio", "Pedaggio", "Parcheggio", "Multa",
+    "Bollo", "Assicurazione", "Revisione", "Finanziamento", "Altro",
+)
 val FUEL_TYPES = listOf("Benzina", "Diesel", "GPL", "Metano", "Ibrida", "Elettrica")
 
 @Dao
@@ -64,14 +71,35 @@ interface GarageDao {
     @Query("SELECT Deadline.*, Vehicle.targa AS targa FROM Deadline JOIN Vehicle ON Vehicle.id = Deadline.vehicleId")
     suspend fun allDeadlines(): List<DeadlineWithTarga>
 
+    // Upsert: id 0 inserts a new row, an existing id updates it.
     @Upsert suspend fun save(v: Vehicle)
-    @Insert suspend fun insert(d: Deadline)
-    @Insert suspend fun insert(f: FuelEntry)
-    @Insert suspend fun insert(e: Expense)
+    @Upsert suspend fun save(d: Deadline)
+    @Upsert suspend fun save(f: FuelEntry)
+    @Upsert suspend fun save(e: Expense)
     @Delete suspend fun delete(v: Vehicle)
     @Delete suspend fun delete(d: Deadline)
     @Delete suspend fun delete(f: FuelEntry)
     @Delete suspend fun delete(e: Expense)
+
+    // Backup: whole-database export and replace.
+    @Query("SELECT * FROM Vehicle") suspend fun allVehicles(): List<Vehicle>
+    @Query("SELECT * FROM Deadline") suspend fun allDeadlineRows(): List<Deadline>
+    @Query("SELECT * FROM FuelEntry") suspend fun allFuel(): List<FuelEntry>
+    @Query("SELECT * FROM Expense") suspend fun allExpenses(): List<Expense>
+    @Query("DELETE FROM Vehicle") suspend fun deleteAllVehicles() // children go with the cascade
+    @Insert suspend fun insertVehicles(l: List<Vehicle>)
+    @Insert suspend fun insertDeadlines(l: List<Deadline>)
+    @Insert suspend fun insertFuel(l: List<FuelEntry>)
+    @Insert suspend fun insertExpenses(l: List<Expense>)
+
+    @Transaction
+    suspend fun replaceAll(b: Backup) {
+        deleteAllVehicles()
+        insertVehicles(b.vehicles)
+        insertDeadlines(b.deadlines)
+        insertFuel(b.fuel)
+        insertExpenses(b.expenses)
+    }
 }
 
 data class DeadlineWithTarga(@Embedded val deadline: Deadline, val targa: String)

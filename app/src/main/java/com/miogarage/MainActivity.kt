@@ -10,7 +10,6 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -23,6 +22,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -44,19 +44,28 @@ import java.util.Locale
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // the app is always dark, so the system bars always get light icons
-        val bars = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT)
-        enableEdgeToEdge(bars, bars)
         if (Build.VERSION.SDK_INT >= 33) {
             registerForActivityResult(ActivityResultContracts.RequestPermission()) {}.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
         val dao = GarageDb.get(this).dao()
-        setContent { GarageTheme { GarageApp(dao) } }
+        setContent {
+            GarageTheme {
+                val dark = isDark
+                // system bar icons must contrast with the app theme, not the phone's
+                LaunchedEffect(dark) {
+                    val t = android.graphics.Color.TRANSPARENT
+                    val bars = if (dark) SystemBarStyle.dark(t) else SystemBarStyle.light(t, t)
+                    enableEdgeToEdge(bars, bars)
+                }
+                GarageApp(dao)
+            }
+        }
     }
 }
 
 private sealed interface Screen {
     data object Vehicles : Screen
+    data object Settings : Screen
     data class VehicleForm(val vehicle: Vehicle?) : Screen
     data class Detail(val id: Long) : Screen
 }
@@ -65,6 +74,7 @@ private val dateFmt = DateTimeFormatter.ofPattern("dd/MM/yyyy")
 private fun Long.date() = LocalDate.ofEpochDay(this).format(dateFmt)
 private fun Double.eur() = String.format(Locale.ITALY, "%.2f €", this)
 private fun Double.dec(digits: Int) = String.format(Locale.ITALY, "%.${digits}f", this)
+private fun Double.input() = toBigDecimal().stripTrailingZeros().toPlainString().replace('.', ',')
 private fun Int.km() = String.format(Locale.ITALY, "%,d", this)
 private fun today() = LocalDate.now().toEpochDay()
 
@@ -79,7 +89,10 @@ fun GarageApp(dao: GarageDao) {
     var screen by remember { mutableStateOf<Screen>(Screen.Vehicles) }
     BackHandler(screen != Screen.Vehicles) { screen = Screen.Vehicles }
     when (val s = screen) {
-        Screen.Vehicles -> VehicleList(dao, onOpen = { screen = Screen.Detail(it) }, onAdd = { screen = Screen.VehicleForm(null) })
+        Screen.Vehicles -> VehicleList(
+            dao, onOpen = { screen = Screen.Detail(it) }, onAdd = { screen = Screen.VehicleForm(null) }, onSettings = { screen = Screen.Settings },
+        )
+        Screen.Settings -> SettingsScreen(dao, onBack = { screen = Screen.Vehicles })
         is Screen.VehicleForm -> VehicleFormScreen(dao, s.vehicle, onDone = { screen = Screen.Vehicles })
         is Screen.Detail -> VehicleDetail(dao, s.id, onBack = { screen = Screen.Vehicles }, onEdit = { screen = Screen.VehicleForm(it) })
     }
@@ -88,43 +101,54 @@ fun GarageApp(dao: GarageDao) {
 // ---------- Vehicles ----------
 
 @Composable
-private fun VehicleList(dao: GarageDao, onOpen: (Long) -> Unit, onAdd: () -> Unit) {
+private fun VehicleList(dao: GarageDao, onOpen: (Long) -> Unit, onAdd: () -> Unit, onSettings: () -> Unit) {
     val vehicles by remember { dao.vehicles() }.collectAsState(null)
     val deadlines by remember { dao.allDeadlinesFlow() }.collectAsState(emptyList())
     val today = today()
     Scaffold(floatingActionButton = { if (!vehicles.isNullOrEmpty()) AddFab("Aggiungi auto", onAdd) }) { pad ->
         val list = vehicles ?: return@Scaffold
-        if (list.isEmpty()) {
-            EmptyGarage(Modifier.padding(pad), onAdd)
-            return@Scaffold
-        }
-        LazyColumn(Modifier.padding(pad), contentPadding = PaddingValues(16.dp, 20.dp, 16.dp, 96.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            item {
-                Text("Il mio garage", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.ExtraBold)
-                Text(if (list.size == 1) "1 veicolo" else "${list.size} veicoli", color = Muted)
-                Spacer(Modifier.height(6.dp))
+        Column(Modifier.padding(pad)) {
+            Row(Modifier.padding(16.dp, 20.dp, 4.dp, 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Il mio garage", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.ExtraBold)
+                    Text(
+                        when (list.size) {
+                            0 -> "Nessun veicolo"
+                            1 -> "1 veicolo"
+                            else -> "${list.size} veicoli"
+                        },
+                        color = Muted,
+                    )
+                }
+                IconButton(onSettings) { Icon(Icons.Default.Settings, "Impostazioni") }
             }
-            items(list, key = { it.id }) { v ->
-                val mine = deadlines.filter { it.vehicleId == v.id }
-                val expired = mine.count { status(it, today) == Status.EXPIRED }
-                val warning = mine.count { status(it, today) == Status.WARNING }
-                Hero(onClick = { onOpen(v.id) }) {
-                    Column {
-                        Text(
-                            "${v.marca} ${v.modello}".trim(), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold,
-                            color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                        )
-                        Text(listOfNotNull(v.alimentazione, v.anno?.toString()).joinToString(" · "), color = Color.White.copy(alpha = 0.7f))
-                    }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Plate(v.targa)
-                        Spacer(Modifier.weight(1f))
-                        val dark = Color.Black.copy(alpha = 0.35f)
-                        when {
-                            expired > 0 -> Pill(if (expired == 1) "1 scaduta" else "$expired scadute", Bad, dark)
-                            warning > 0 -> Pill("$warning in scadenza", Warn, dark)
-                            mine.isEmpty() -> Pill("Nessuna scadenza", Color.White.copy(alpha = 0.8f), dark)
-                            else -> Pill("Tutto in regola", Good, dark)
+            if (list.isEmpty()) {
+                EmptyGarage(onAdd)
+                return@Column
+            }
+            LazyColumn(contentPadding = PaddingValues(16.dp, 8.dp, 16.dp, 96.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                items(list, key = { it.id }) { v ->
+                    val mine = deadlines.filter { it.vehicleId == v.id }
+                    val expired = mine.count { status(it, today) == Status.EXPIRED }
+                    val warning = mine.count { status(it, today) == Status.WARNING }
+                    Hero(onClick = { onOpen(v.id) }) {
+                        Column {
+                            Text(
+                                "${v.marca} ${v.modello}".trim(), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold,
+                                color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                            )
+                            Text(listOfNotNull(v.alimentazione, v.anno?.toString()).joinToString(" · "), color = Color.White.copy(alpha = 0.7f))
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Plate(v.targa)
+                            Spacer(Modifier.weight(1f))
+                            val dark = Color.Black.copy(alpha = 0.35f)
+                            when {
+                                expired > 0 -> Pill(if (expired == 1) "1 scaduta" else "$expired scadute", HeroBad, dark)
+                                warning > 0 -> Pill("$warning in scadenza", HeroWarn, dark)
+                                mine.isEmpty() -> Pill("Nessuna scadenza", Color.White.copy(alpha = 0.8f), dark)
+                                else -> Pill("Tutto in regola", HeroGood, dark)
+                            }
                         }
                     }
                 }
@@ -134,19 +158,21 @@ private fun VehicleList(dao: GarageDao, onOpen: (Long) -> Unit, onAdd: () -> Uni
 }
 
 @Composable
-private fun EmptyGarage(modifier: Modifier, onAdd: () -> Unit) {
-    Column(modifier.fillMaxSize().padding(32.dp), Arrangement.Center, Alignment.CenterHorizontally) {
+private fun EmptyGarage(onAdd: () -> Unit) {
+    Column(Modifier.fillMaxSize().padding(32.dp), Arrangement.Center, Alignment.CenterHorizontally) {
         Box(Modifier.size(104.dp).clip(CircleShape).background(Surface1), Alignment.Center) { Text("🚗", fontSize = 46.sp) }
         Spacer(Modifier.height(24.dp))
         Text("Il garage è vuoto", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold)
         Spacer(Modifier.height(8.dp))
-        Text("Aggiungi la tua auto per tenere sotto controllo scadenze, pieni e spese.", color = Muted, textAlign = TextAlign.Center)
+        Text(
+            "Aggiungi la tua auto per tenere sotto controllo scadenze, rifornimenti e spese. Se hai un backup, importalo dalle impostazioni.",
+            color = Muted, textAlign = TextAlign.Center,
+        )
         Spacer(Modifier.height(24.dp))
         BigButton("Aggiungi auto", onClick = onAdd)
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun VehicleFormScreen(dao: GarageDao, existing: Vehicle?, onDone: () -> Unit) {
     val scope = rememberCoroutineScope()
@@ -180,7 +206,7 @@ private fun VehicleFormScreen(dao: GarageDao, existing: Vehicle?, onDone: () -> 
         }
     }
     if (confirmDelete && existing != null) {
-        ConfirmDelete("Eliminare ${existing.targa} e tutto il suo storico?", onDismiss = { confirmDelete = false }) {
+        ConfirmDialog("Eliminare ${existing.targa} e tutto il suo storico?", onDismiss = { confirmDelete = false }) {
             scope.launch { dao.delete(existing); onDone() }
         }
     }
@@ -197,15 +223,16 @@ private fun VehicleDetail(dao: GarageDao, id: Long, onBack: () -> Unit, onEdit: 
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var adding by remember { mutableStateOf(false) }
     val v = vehicle ?: return
+    val lastKm = fuel.maxOfOrNull { it.km } ?: v.km
 
     Scaffold(
         topBar = {
             Column {
                 TopBar("${v.marca} ${v.modello}".trim(), onBack) { IconButton({ onEdit(v) }) { Icon(Icons.Default.Edit, "Modifica veicolo") } }
-                PillTabs(listOf("Riepilogo", "Scadenze", "Pieni", "Spese"), tab) { tab = it }
+                PillTabs(listOf("Riepilogo", "Scadenze", "Rifornimenti", "Spese"), tab) { tab = it }
             }
         },
-        floatingActionButton = { if (tab > 0) AddFab(listOf("Scadenza", "Pieno", "Spesa")[tab - 1]) { adding = true } },
+        floatingActionButton = { if (tab > 0) AddFab(listOf("Scadenza", "Rifornimento", "Spesa")[tab - 1]) { adding = true } },
     ) { pad ->
         Box(Modifier.padding(pad)) {
             when (tab) {
@@ -217,80 +244,79 @@ private fun VehicleDetail(dao: GarageDao, id: Long, onBack: () -> Unit, onEdit: 
         }
     }
     if (adding) when (tab) {
-        1 -> DeadlineDialog(dao, v.id) { adding = false }
-        2 -> FuelDialog(dao, v.id, fuel.maxOfOrNull { it.km } ?: v.km) { adding = false }
-        3 -> ExpenseDialog(dao, v.id) { adding = false }
+        1 -> DeadlineDialog(dao, v.id, null) { adding = false }
+        2 -> FuelDialog(dao, v.id, null, lastKm) { adding = false }
+        3 -> ExpenseDialog(dao, v.id, null) { adding = false }
     }
 }
 
+/** Sized to fit a normal phone without scrolling; the scroll only kicks in on small screens or large fonts. */
 @Composable
 private fun Summary(v: Vehicle, deadlines: List<Deadline>, fuel: List<FuelEntry>, expenses: List<Expense>, goTo: (Int) -> Unit) {
     val today = today()
     val series = remember(fuel) { consumptionSeries(fuel).map { it.second }.takeLast(12) }
+    val avg = avgKmPerLiter(fuel)
     val fuelCost = fuel.sumOf { it.importo }
     val otherCost = expenses.sumOf { it.importo }
-    Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp, 8.dp, 16.dp, 24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+    Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp, 4.dp, 16.dp, 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Hero {
-            Column {
-                Text("CONTACHILOMETRI", color = Color.White.copy(alpha = 0.7f), style = MaterialTheme.typography.labelMedium, letterSpacing = 1.5.sp)
-                Row(verticalAlignment = Alignment.Bottom) {
-                    Text(currentKm(v, fuel, expenses).km(), style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Black, color = Color.White)
-                    Text(" km", Modifier.padding(bottom = 5.dp), color = Color.White.copy(alpha = 0.7f), style = MaterialTheme.typography.titleMedium)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("CONTACHILOMETRI", color = Color.White.copy(alpha = 0.7f), style = MaterialTheme.typography.labelMedium, letterSpacing = 1.5.sp)
+                    Row(verticalAlignment = Alignment.Bottom) {
+                        Text(currentKm(v, fuel, expenses).km(), style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Black, color = Color.White)
+                        Text(" km", Modifier.padding(bottom = 4.dp), color = Color.White.copy(alpha = 0.7f), style = MaterialTheme.typography.titleMedium)
+                    }
                 }
+                Plate(v.targa)
             }
-            Plate(v.targa)
         }
 
         Panel(onClick = { goTo(1) }) {
-            SectionTitle("Scadenze")
+            SectionTitle("Prossime scadenze")
             if (deadlines.isEmpty()) Text("Nessuna scadenza inserita", color = Muted)
-            deadlines.take(3).forEach { DeadlineRow(it, today) }
+            deadlines.take(2).forEach { DeadlineRow(it, today) }
         }
 
-        Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            StatTile(Modifier.weight(1f), "Consumo medio", avgKmPerLiter(fuel)?.dec(1), "km/l", "Servono 2 pieni") { goTo(2) }
-            StatTile(Modifier.weight(1f), "Costo al km", costPerKm(v, fuel, expenses)?.dec(3), "€/km", "Ancora nessun dato") { goTo(3) }
-        }
-
-        if (series.size >= 2) Panel(onClick = { goTo(2) }) {
-            SectionTitle("Andamento consumi")
-            BarChart(series, "Consumi degli ultimi ${series.size} pieni, l'ultimo ${series.last().dec(1)} chilometri al litro")
-            Text("Ultimi ${series.size} pieni · km/l", color = Muted, style = MaterialTheme.typography.bodySmall)
+        Panel(onClick = { goTo(2) }) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+                Column {
+                    SectionTitle("Consumo medio")
+                    Row(verticalAlignment = Alignment.Bottom) {
+                        Text(avg?.dec(1) ?: "—", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold, color = if (avg == null) Muted else Ink)
+                        if (avg != null) Text(" km/l", Modifier.padding(bottom = 4.dp), color = Accent, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
+                    }
+                    if (avg == null) Text("Servono 2 rifornimenti", color = Muted, style = MaterialTheme.typography.bodySmall)
+                }
+                if (series.size >= 2) {
+                    BarChart(series, "Consumi degli ultimi ${series.size} rifornimenti, l'ultimo ${series.last().dec(1)} chilometri al litro", Modifier.weight(1f))
+                }
+            }
         }
 
         Panel(onClick = { goTo(3) }) {
             SectionTitle("Costo totale")
-            Text((fuelCost + otherCost).eur(), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text((fuelCost + otherCost).eur(), Modifier.weight(1f), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold)
+                costPerKm(v, fuel, expenses)?.let { Pill("${it.dec(3)} €/km", Accent) }
+            }
             SplitBar(fuelCost, otherCost)
-            LegendRow(Accent, "Carburante", fuelCost)
-            LegendRow(Violet, "Manutenzione e altro", otherCost)
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Legend(Modifier.weight(1f), Accent, "Carburante", fuelCost)
+                Legend(Modifier.weight(1f), Violet, "Altro", otherCost)
+            }
         }
     }
 }
 
 @Composable
-private fun SectionTitle(text: String) = Text(text, color = Muted, style = MaterialTheme.typography.labelLarge)
+fun SectionTitle(text: String) = Text(text, color = Muted, style = MaterialTheme.typography.labelLarge)
 
 @Composable
-private fun LegendRow(color: Color, label: String, amount: Double) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
+private fun Legend(modifier: Modifier, color: Color, label: String, amount: Double) {
+    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
         Dot(color)
-        Text(label, Modifier.padding(start = 10.dp).weight(1f))
-        Text(amount.eur(), fontWeight = FontWeight.SemiBold)
-    }
-}
-
-@Composable
-private fun StatTile(modifier: Modifier, label: String, value: String?, unit: String, empty: String, onClick: () -> Unit) {
-    Panel(modifier, onClick) {
-        SectionTitle(label)
-        if (value == null) {
-            Text("—", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold, color = Muted)
-            Text(empty, color = Muted, style = MaterialTheme.typography.bodySmall)
-        } else {
-            Text(value, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold)
-            Text(unit, color = Accent, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
-        }
+        Text("$label ${amount.eur()}", Modifier.padding(start = 8.dp), style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
@@ -307,35 +333,32 @@ private fun DeadlineRow(d: Deadline, today: Long) {
     }
 }
 
-// ---------- Lists ----------
+// ---------- Lists: tap a row to edit it ----------
 
 @Composable
-private fun <T> EntryList(items: List<T>, empty: String, onDelete: (T) -> Unit, row: @Composable (T) -> Unit) {
-    var toDelete by remember { mutableStateOf<T?>(null) }
+private fun <T> EntryList(items: List<T>, empty: String, onClick: (T) -> Unit, row: @Composable (T) -> Unit) {
     if (items.isEmpty()) Box(Modifier.fillMaxSize().padding(32.dp), Alignment.Center) { Text(empty, color = Muted, textAlign = TextAlign.Center) }
     LazyColumn(contentPadding = PaddingValues(16.dp, 8.dp, 16.dp, 96.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        items(items) { item -> Panel(onClick = { toDelete = item }) { row(item) } }
+        items(items) { item -> Panel(onClick = { onClick(item) }) { row(item) } }
         if (items.isNotEmpty()) item {
-            Text("Tocca una voce per eliminarla", Modifier.fillMaxWidth().padding(top = 6.dp), color = Muted, style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
+            Text("Tocca una voce per modificarla", Modifier.fillMaxWidth().padding(top = 6.dp), color = Muted, style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
         }
     }
-    toDelete?.let { ConfirmDelete("Eliminare questa voce?", onDismiss = { toDelete = null }) { onDelete(it); toDelete = null } }
 }
 
 @Composable
 private fun DeadlineList(dao: GarageDao, items: List<Deadline>) {
-    val scope = rememberCoroutineScope()
+    var editing by remember { mutableStateOf<Deadline?>(null) }
     val today = today()
-    EntryList(items, "Nessuna scadenza.\nAggiungi bollo, revisione e assicurazione per ricevere gli avvisi.", { scope.launch { dao.delete(it) } }) {
-        DeadlineRow(it, today)
-    }
+    EntryList(items, "Nessuna scadenza.\nAggiungi bollo, revisione e assicurazione per ricevere gli avvisi.", { editing = it }) { DeadlineRow(it, today) }
+    editing?.let { DeadlineDialog(dao, it.vehicleId, it) { editing = null } }
 }
 
 @Composable
 private fun FuelList(dao: GarageDao, items: List<FuelEntry>) {
-    val scope = rememberCoroutineScope()
+    var editing by remember { mutableStateOf<FuelEntry?>(null) }
     val kmPerLiter = remember(items) { consumptionSeries(items).associate { it.first.id to it.second } }
-    EntryList(items, "Nessun rifornimento.\nRegistra i pieni per calcolare i consumi.", { scope.launch { dao.delete(it) } }) { f ->
+    EntryList(items, "Nessun rifornimento.\nRegistrali per calcolare i consumi.", { editing = it }) { f ->
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text(f.data.date(), fontWeight = FontWeight.SemiBold)
@@ -347,12 +370,13 @@ private fun FuelList(dao: GarageDao, items: List<FuelEntry>) {
             }
         }
     }
+    editing?.let { FuelDialog(dao, it.vehicleId, it, lastKm = 0) { editing = null } }
 }
 
 @Composable
 private fun ExpenseList(dao: GarageDao, items: List<Expense>) {
-    val scope = rememberCoroutineScope()
-    EntryList(items, "Nessuna spesa.\nRegistra tagliandi, gomme, lavaggi e pedaggi.", { scope.launch { dao.delete(it) } }) { e ->
+    var editing by remember { mutableStateOf<Expense?>(null) }
+    EntryList(items, "Nessuna spesa.\nRegistra riparazioni, gomme, lavaggi e pedaggi.", { editing = it }) { e ->
         val color = categoryColor(e.categoria)
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(40.dp).clip(CircleShape).background(color.copy(alpha = 0.16f)), Alignment.Center) {
@@ -368,59 +392,68 @@ private fun ExpenseList(dao: GarageDao, items: List<Expense>) {
             Text(e.importo.eur(), fontWeight = FontWeight.Bold)
         }
     }
+    editing?.let { ExpenseDialog(dao, it.vehicleId, it) { editing = null } }
 }
 
-// ---------- Add dialogs ----------
+// ---------- Add / edit dialogs: `existing == null` means a new entry ----------
 
 @Composable
-private fun DeadlineDialog(dao: GarageDao, vehicleId: Long, close: () -> Unit) {
+private fun DeadlineDialog(dao: GarageDao, vehicleId: Long, existing: Deadline?, close: () -> Unit) {
     val scope = rememberCoroutineScope()
-    var tipo by remember { mutableStateOf(DEADLINE_TYPES[0]) }
-    var data by remember { mutableLongStateOf(today()) }
-    FormDialog("Nuova scadenza", valid = true, close = close, save = { scope.launch { dao.insert(Deadline(0, vehicleId, tipo, data)); close() } }) {
+    var tipo by remember { mutableStateOf(existing?.tipo ?: DEADLINE_TYPES[0]) }
+    var data by remember { mutableLongStateOf(existing?.data ?: today()) }
+    FormDialog(
+        if (existing == null) "Nuova scadenza" else "Modifica scadenza", valid = true, close = close,
+        save = { scope.launch { dao.save(Deadline(existing?.id ?: 0, vehicleId, tipo, data)); close() } },
+        onDelete = existing?.let { { scope.launch { dao.delete(it); close() } } },
+    ) {
         Chips(DEADLINE_TYPES, tipo) { tipo = it }
         DateField("Data scadenza", data) { data = it }
     }
 }
 
 @Composable
-private fun FuelDialog(dao: GarageDao, vehicleId: Long, lastKm: Int, close: () -> Unit) {
+private fun FuelDialog(dao: GarageDao, vehicleId: Long, existing: FuelEntry?, lastKm: Int, close: () -> Unit) {
     val scope = rememberCoroutineScope()
-    var data by remember { mutableLongStateOf(today()) }
-    var litri by remember { mutableStateOf("") }
-    var importo by remember { mutableStateOf("") }
-    var km by remember { mutableStateOf("") }
+    var data by remember { mutableLongStateOf(existing?.data ?: today()) }
+    var litri by remember { mutableStateOf(existing?.litri?.input() ?: "") }
+    var importo by remember { mutableStateOf(existing?.importo?.input() ?: "") }
+    var km by remember { mutableStateOf(existing?.km?.toString() ?: "") }
     val l = parseNum(litri)
     val i = parseNum(importo)
     val k = km.toIntOrNull()
     FormDialog(
-        "Nuovo rifornimento",
+        if (existing == null) "Nuovo rifornimento" else "Modifica rifornimento",
         valid = l != null && l > 0 && i != null && i >= 0 && k != null && k >= 0,
         close = close,
-        save = { scope.launch { dao.insert(FuelEntry(0, vehicleId, data, l!!, i!!, k!!)); close() } },
+        save = { scope.launch { dao.save(FuelEntry(existing?.id ?: 0, vehicleId, data, l!!, i!!, k!!)); close() } },
+        onDelete = existing?.let { { scope.launch { dao.delete(it); close() } } },
     ) {
         DateField("Data", data) { data = it }
         Field(litri, { litri = it }, "Litri", KeyboardType.Decimal)
         Field(importo, { importo = it }, "Importo €", KeyboardType.Decimal)
-        Field(km, { km = it }, "Km (ultimo: ${lastKm.km()})", KeyboardType.Number)
-        if (k != null && k < lastKm) Text("Attenzione: km inferiori all'ultimo pieno", color = Bad, style = MaterialTheme.typography.bodySmall)
+        Field(km, { km = it }, if (existing == null) "Km (ultimo: ${lastKm.km()})" else "Km", KeyboardType.Number)
+        if (existing == null && k != null && k < lastKm) {
+            Text("Attenzione: km inferiori all'ultimo rifornimento", color = Bad, style = MaterialTheme.typography.bodySmall)
+        }
     }
 }
 
 @Composable
-private fun ExpenseDialog(dao: GarageDao, vehicleId: Long, close: () -> Unit) {
+private fun ExpenseDialog(dao: GarageDao, vehicleId: Long, existing: Expense?, close: () -> Unit) {
     val scope = rememberCoroutineScope()
-    var categoria by remember { mutableStateOf(EXPENSE_CATEGORIES[0]) }
-    var data by remember { mutableLongStateOf(today()) }
-    var importo by remember { mutableStateOf("") }
-    var km by remember { mutableStateOf("") }
-    var note by remember { mutableStateOf("") }
+    var categoria by remember { mutableStateOf(existing?.categoria ?: EXPENSE_CATEGORIES[0]) }
+    var data by remember { mutableLongStateOf(existing?.data ?: today()) }
+    var importo by remember { mutableStateOf(existing?.importo?.input() ?: "") }
+    var km by remember { mutableStateOf(existing?.km?.toString() ?: "") }
+    var note by remember { mutableStateOf(existing?.note ?: "") }
     val i = parseNum(importo)
     FormDialog(
-        "Nuova spesa",
+        if (existing == null) "Nuova spesa" else "Modifica spesa",
         valid = i != null && i >= 0 && (km.isBlank() || km.toIntOrNull() != null),
         close = close,
-        save = { scope.launch { dao.insert(Expense(0, vehicleId, data, categoria, i!!, km.toIntOrNull(), note.trim())); close() } },
+        save = { scope.launch { dao.save(Expense(existing?.id ?: 0, vehicleId, data, categoria, i!!, km.toIntOrNull(), note.trim())); close() } },
+        onDelete = existing?.let { { scope.launch { dao.delete(it); close() } } },
     ) {
         Chips(EXPENSE_CATEGORIES, categoria) { categoria = it }
         DateField("Data", data) { data = it }
@@ -434,7 +467,7 @@ private fun ExpenseDialog(dao: GarageDao, vehicleId: Long, close: () -> Unit) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun TopBar(title: String, onBack: () -> Unit, actions: @Composable RowScope.() -> Unit = {}) {
+fun TopBar(title: String, onBack: () -> Unit, actions: @Composable RowScope.() -> Unit = {}) {
     TopAppBar(
         title = { Text(title, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis) },
         navigationIcon = { IconButton(onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Indietro") } },
@@ -457,23 +490,33 @@ private fun BigButton(text: String, enabled: Boolean = true, onClick: () -> Unit
     }
 }
 
+/** `onDelete` adds an "Elimina" button (with its own confirmation) for existing entries. */
 @Composable
-private fun FormDialog(title: String, valid: Boolean, close: () -> Unit, save: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
+private fun FormDialog(
+    title: String, valid: Boolean, close: () -> Unit, save: () -> Unit, onDelete: (() -> Unit)? = null, content: @Composable ColumnScope.() -> Unit,
+) {
+    var confirmDelete by remember { mutableStateOf(false) }
     AlertDialog(
         onDismissRequest = close,
         title = { Text(title, fontWeight = FontWeight.Bold) },
         text = { Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp), content = content) },
         confirmButton = { Button(save, enabled = valid) { Text("Salva") } },
-        dismissButton = { TextButton(close) { Text("Annulla", color = Muted) } },
+        dismissButton = {
+            Row {
+                if (onDelete != null) TextButton({ confirmDelete = true }) { Text("Elimina", color = Bad) }
+                TextButton(close) { Text("Annulla", color = Muted) }
+            }
+        },
     )
+    if (confirmDelete && onDelete != null) ConfirmDialog("Eliminare questa voce?", onDismiss = { confirmDelete = false }, onConfirm = onDelete)
 }
 
 @Composable
-private fun ConfirmDelete(text: String, onDismiss: () -> Unit, onConfirm: () -> Unit) {
+fun ConfirmDialog(text: String, confirm: String = "Elimina", onDismiss: () -> Unit, onConfirm: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
         text = { Text(text, color = Ink) },
-        confirmButton = { TextButton(onConfirm) { Text("Elimina", color = Bad) } },
+        confirmButton = { TextButton(onConfirm) { Text(confirm, color = Bad) } },
         dismissButton = { TextButton(onDismiss) { Text("Annulla", color = Muted) } },
     )
 }
@@ -486,9 +529,11 @@ private fun Field(value: String, onChange: (String) -> Unit, label: String, type
     )
 }
 
+/** Wrapping grid of choices: every option is visible at once, no sideways scrolling. */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun Chips(options: List<String>, selected: String, onSelect: (String) -> Unit) {
-    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+fun Chips(options: List<String>, selected: String, onSelect: (String) -> Unit) {
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         options.forEach { FilterChip(it == selected, { onSelect(it) }, label = { Text(it) }, shape = CircleShape) }
     }
 }

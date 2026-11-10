@@ -9,7 +9,11 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -27,20 +31,33 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-val Bg = Color(0xFF0A0D12)
-val Surface1 = Color(0xFF131821)
-val Surface2 = Color(0xFF1B2230)
-val Line = Color(0xFF263043)
-val Ink = Color(0xFFEEF2F8)
-val Muted = Color(0xFF8B97AB)
-val Accent = Color(0xFF4F8CFF)
-val Violet = Color(0xFFA78BFA)
-val Good = Color(0xFF3DDC97)
-val Warn = Color(0xFFFFC53D)
-val Bad = Color(0xFFFF5C6C)
+// Global so the palette below can be plain top-level names; set once per composition by GarageTheme.
+var isDark by mutableStateOf(true)
+    private set
 
-private val CategoryColors = listOf(Accent, Violet, Color(0xFF2DD4BF), Color(0xFFFF8A4C), Color(0xFFF472B6), Color(0xFF38BDF8))
-fun categoryColor(categoria: String) = CategoryColors[EXPENSE_CATEGORIES.indexOf(categoria).mod(CategoryColors.size)]
+private fun pick(dark: Long, light: Long) = Color(if (isDark) dark else light)
+
+val Bg get() = pick(0xFF0A0D12, 0xFFF3F5F9)
+val Surface1 get() = pick(0xFF131821, 0xFFFFFFFF)
+val Surface2 get() = pick(0xFF1B2230, 0xFFE8ECF3)
+val Line get() = pick(0xFF263043, 0xFFDCE2EC)
+val Ink get() = pick(0xFFEEF2F8, 0xFF10141C)
+val Muted get() = pick(0xFF8B97AB, 0xFF5D6878)
+val Accent get() = pick(0xFF4F8CFF, 0xFF2F6BF0)
+val Violet get() = pick(0xFFA78BFA, 0xFF7C5CE0)
+val Good get() = pick(0xFF3DDC97, 0xFF12905A)
+val Warn get() = pick(0xFFFFC53D, 0xFFA86A00)
+val Bad get() = pick(0xFFFF5C6C, 0xFFD43A4A)
+
+// Status colours for text on the blue hero card, which is dark in both themes.
+val HeroGood = Color(0xFF3DDC97)
+val HeroWarn = Color(0xFFFFC53D)
+val HeroBad = Color(0xFFFF8A95)
+
+fun categoryColor(categoria: String): Color {
+    val colors = listOf(Accent, Violet, pick(0xFF2DD4BF, 0xFF0F9488), pick(0xFFFF8A4C, 0xFFD9601A), pick(0xFFF472B6, 0xFFD23A8C), pick(0xFF38BDF8, 0xFF0C86C4))
+    return colors[EXPENSE_CATEGORIES.indexOf(categoria).mod(colors.size)]
+}
 
 fun Status.color() = when (this) {
     Status.OK -> Good
@@ -48,27 +65,34 @@ fun Status.color() = when (this) {
     Status.EXPIRED -> Bad
 }
 
-private val Scheme = darkColorScheme(
+private fun scheme() = (if (isDark) darkColorScheme() else lightColorScheme()).copy(
     primary = Accent, onPrimary = Color.White,
-    primaryContainer = Color(0xFF1C3466), onPrimaryContainer = Color(0xFFDCE7FF),
+    primaryContainer = pick(0xFF1C3466, 0xFFDCE7FF), onPrimaryContainer = pick(0xFFDCE7FF, 0xFF0F2A66),
     secondary = Accent, onSecondary = Color.White,
-    secondaryContainer = Color(0xFF1C3466), onSecondaryContainer = Color(0xFFDCE7FF),
+    secondaryContainer = pick(0xFF1C3466, 0xFFDCE7FF), onSecondaryContainer = pick(0xFFDCE7FF, 0xFF0F2A66),
     tertiary = Violet,
     background = Bg, onBackground = Ink,
     surface = Bg, onSurface = Ink,
     surfaceVariant = Surface2, onSurfaceVariant = Muted,
     surfaceContainerLowest = Bg, surfaceContainerLow = Surface1, surfaceContainer = Surface1,
-    surfaceContainerHigh = Surface2, surfaceContainerHighest = Surface2,
-    outline = Color(0xFF3A465C), outlineVariant = Line,
+    surfaceContainerHigh = pick(0xFF1B2230, 0xFFFFFFFF), surfaceContainerHighest = Surface2,
+    outline = pick(0xFF3A465C, 0xFFB4BDCC), outlineVariant = Line,
     error = Bad, onError = Color.White,
 )
 
 @Composable
-fun GarageTheme(content: @Composable () -> Unit) = MaterialTheme(
-    colorScheme = Scheme,
-    shapes = Shapes(small = RoundedCornerShape(12.dp), medium = RoundedCornerShape(16.dp), large = RoundedCornerShape(20.dp)),
-    content = content,
-)
+fun GarageTheme(content: @Composable () -> Unit) {
+    isDark = when (Prefs.theme) {
+        "light" -> false
+        "dark" -> true
+        else -> isSystemInDarkTheme()
+    }
+    MaterialTheme(
+        colorScheme = scheme(),
+        shapes = Shapes(small = RoundedCornerShape(12.dp), medium = RoundedCornerShape(16.dp), large = RoundedCornerShape(20.dp)),
+        content = content,
+    )
+}
 
 /** Bordered dark card: the base container of every list row and summary block. */
 @Composable
@@ -119,7 +143,8 @@ fun PillTabs(tabs: List<String>, selected: Int, onSelect: (Int) -> Unit) {
         tabs.forEachIndexed { i, t ->
             val sel = i == selected
             Box(
-                Modifier.weight(1f).height(44.dp).clip(CircleShape).background(if (sel) Accent else Color.Transparent)
+                // width follows label length, so "Rifornimenti" fits next to "Spese" on narrow phones
+                Modifier.weight(t.length + 3f).height(44.dp).clip(CircleShape).background(if (sel) Accent else Color.Transparent)
                     .selectable(selected = sel, role = Role.Tab, onClick = { onSelect(i) }),
                 Alignment.Center,
             ) {
@@ -142,8 +167,9 @@ fun SplitBar(a: Double, b: Double) {
 }
 
 @Composable
-fun BarChart(values: List<Double>, description: String) {
-    Canvas(Modifier.fillMaxWidth().height(72.dp).semantics { contentDescription = description }) {
+fun BarChart(values: List<Double>, description: String, modifier: Modifier = Modifier) {
+    val accent = Accent
+    Canvas(modifier.height(56.dp).semantics { contentDescription = description }) {
         val max = values.max()
         val base = values.min() * 0.7 // not from zero: real consumption varies by a few km/l, which would look flat
         val gap = 6.dp.toPx()
@@ -151,7 +177,7 @@ fun BarChart(values: List<Double>, description: String) {
         values.forEachIndexed { i, v ->
             val h = ((v - base) / (max - base)).toFloat().coerceIn(0.08f, 1f) * size.height
             drawRoundRect(
-                color = if (i == values.lastIndex) Accent else Accent.copy(alpha = 0.35f),
+                color = if (i == values.lastIndex) accent else accent.copy(alpha = 0.35f),
                 topLeft = Offset(i * (w + gap), size.height - h), size = Size(w, h), cornerRadius = CornerRadius(6.dp.toPx()),
             )
         }

@@ -12,7 +12,8 @@ fun status(d: Deadline, today: Long) = when {
     else -> Status.OK
 }
 
-// shortcut: assumes every refuel is a full tank (full-to-full method); partial fills skew the average, add a "pieno" flag if users need it.
+// Total km over total litres (the first refuel only sets the baseline). Stays right with partial refuels too:
+// the error is at most one tank and shrinks as entries add up.
 fun avgKmPerLiter(fuel: List<FuelEntry>): Double? {
     val s = fuel.sortedBy { it.km }
     if (s.size < 2) return null
@@ -34,7 +35,7 @@ fun costPerKm(v: Vehicle, fuel: List<FuelEntry>, expenses: List<Expense>): Doubl
 /** Accepts Italian "1,5" as well as "1.5". */
 fun parseNum(s: String) = s.trim().replace(',', '.').toDoubleOrNull()
 
-/** km/l of each refuel after the first, in odometer order. Same full-tank assumption as avgKmPerLiter. */
+/** km/l of each refuel after the first, in odometer order. Only indicative when a refuel was not a full tank. */
 fun consumptionSeries(fuel: List<FuelEntry>): List<Pair<FuelEntry, Double>> =
     fuel.sortedBy { it.km }.zipWithNext().mapNotNull { (prev, cur) ->
         val km = cur.km - prev.km

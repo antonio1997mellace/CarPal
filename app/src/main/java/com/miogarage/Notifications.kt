@@ -20,6 +20,7 @@ const val CHANNEL = "scadenze"
 class App : Application() {
     override fun onCreate() {
         super.onCreate()
+        Prefs.load(this)
         getSystemService(NotificationManager::class.java)
             .createNotificationChannel(NotificationChannel(CHANNEL, "Scadenze", NotificationManager.IMPORTANCE_DEFAULT))
         WorkManager.getInstance(this).enqueueUniquePeriodicWork(
@@ -32,6 +33,7 @@ class App : Application() {
 /** Daily check: notifies 30 days before, then every day of the last week, and for up to 30 days after expiry. */
 class DeadlineWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx, params) {
     override suspend fun doWork(): Result {
+        if (!Prefs.notifications) return Result.success()
         if (ContextCompat.checkSelfPermission(applicationContext, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED &&
             android.os.Build.VERSION.SDK_INT >= 33
         ) return Result.success()
