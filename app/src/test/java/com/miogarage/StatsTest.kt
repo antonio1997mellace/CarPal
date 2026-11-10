@@ -14,6 +14,13 @@ class StatsTest {
         assertNull(avgKmPerLiter(listOf(fuel(10_000, 40.0), fuel(10_000, 40.0))))
     }
 
+    @Test fun seriesPerRefuel() {
+        val s = consumptionSeries(listOf(fuel(11_000, 50.0), fuel(10_000, 99.0), fuel(10_500, 40.0), fuel(10_500, 10.0)))
+        // the duplicate-km entry is skipped rather than producing a 0 km/l bar
+        assertEquals(listOf(12.5, 10.0), s.map { it.second })
+        assertEquals(listOf(10_500, 11_000), s.map { it.first.km })
+    }
+
     @Test fun deadlineStatus() {
         val d = Deadline(0, 1, "Bollo", 100)
         assertEquals(Status.EXPIRED, status(d, 101))

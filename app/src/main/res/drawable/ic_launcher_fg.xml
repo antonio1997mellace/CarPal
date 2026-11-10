@@ -1,0 +1,12 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+    <!-- roof -->
+    <path android:fillColor="#FFFFFF" android:pathData="M38,53 L43.5,41 Q45,38 48,38 L60,38 Q63,38 64.5,41 L70,53 Z" />
+    <!-- body -->
+    <path android:fillColor="#FFFFFF" android:pathData="M35,51 H73 A5,5 0 0 1 78,56 V63 A3,3 0 0 1 75,66 H33 A3,3 0 0 1 30,63 V56 A5,5 0 0 1 35,51 Z" />
+    <!-- windows -->
+    <path android:fillColor="#1D3A8A" android:pathData="M42.5,51 L46,43 Q46.5,42 48,42 L60,42 Q61.5,42 62,43 L65.5,51 Z" />
+    <!-- wheels -->
+    <path android:fillColor="#101A38" android:pathData="M35,66 a6.5,6.5 0 1,0 13,0 a6.5,6.5 0 1,0 -13,0 M60,66 a6.5,6.5 0 1,0 13,0 a6.5,6.5 0 1,0 -13,0" />
+    <path android:fillColor="#FFFFFF" android:pathData="M39,66 a2.5,2.5 0 1,0 5,0 a2.5,2.5 0 1,0 -5,0 M64,66 a2.5,2.5 0 1,0 5,0 a2.5,2.5 0 1,0 -5,0" />
+</vector>

@@ -59,6 +59,8 @@ interface GarageDao {
     @Query("SELECT * FROM FuelEntry WHERE vehicleId = :v ORDER BY km DESC") fun fuel(v: Long): Flow<List<FuelEntry>>
     @Query("SELECT * FROM Expense WHERE vehicleId = :v ORDER BY data DESC, id DESC") fun expenses(v: Long): Flow<List<Expense>>
 
+    @Query("SELECT * FROM Deadline") fun allDeadlinesFlow(): Flow<List<Deadline>>
+
     @Query("SELECT Deadline.*, Vehicle.targa AS targa FROM Deadline JOIN Vehicle ON Vehicle.id = Deadline.vehicleId")
     suspend fun allDeadlines(): List<DeadlineWithTarga>
 

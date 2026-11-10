@@ -33,3 +33,10 @@ fun costPerKm(v: Vehicle, fuel: List<FuelEntry>, expenses: List<Expense>): Doubl
 
 /** Accepts Italian "1,5" as well as "1.5". */
 fun parseNum(s: String) = s.trim().replace(',', '.').toDoubleOrNull()
+
+/** km/l of each refuel after the first, in odometer order. Same full-tank assumption as avgKmPerLiter. */
+fun consumptionSeries(fuel: List<FuelEntry>): List<Pair<FuelEntry, Double>> =
+    fuel.sortedBy { it.km }.zipWithNext().mapNotNull { (prev, cur) ->
+        val km = cur.km - prev.km
+        if (km > 0 && cur.litri > 0) cur to km / cur.litri else null
+    }
