@@ -33,6 +33,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -179,6 +181,7 @@ private fun EmptyGarage(onAdd: () -> Unit) {
 @Composable
 private fun VehicleFormScreen(dao: GarageDao, existing: Vehicle?, onDone: () -> Unit) {
     val scope = rememberCoroutineScope()
+    val ctx = LocalContext.current
     var targa by remember { mutableStateOf(existing?.targa ?: "") }
     var marca by remember { mutableStateOf(existing?.marca ?: "") }
     var modello by remember { mutableStateOf(existing?.modello ?: "") }
@@ -192,8 +195,9 @@ private fun VehicleFormScreen(dao: GarageDao, existing: Vehicle?, onDone: () -> 
     Scaffold(topBar = { TopBar(if (existing == null) "Nuovo veicolo" else "Modifica veicolo", onDone) }) { pad ->
         Column(Modifier.padding(pad).padding(16.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Field(targa, { targa = it.uppercase() }, "Targa *")
-            Field(marca, { marca = it }, "Marca *")
-            Field(modello, { modello = it }, "Modello")
+            // capitalised here too: not every keyboard honours the capitalisation hint
+            Field(marca, { marca = it.replaceFirstChar { c -> c.uppercase() } }, "Marca *", cap = KeyboardCapitalization.Words)
+            Field(modello, { modello = it.replaceFirstChar { c -> c.uppercase() } }, "Modello", cap = KeyboardCapitalization.Words)
             Field(anno, { anno = it }, "Anno", KeyboardType.Number)
             Field(km, { km = it }, "Km all'inserimento *", KeyboardType.Number)
             Text("Alimentazione", color = Muted, style = MaterialTheme.typography.labelLarge)
@@ -210,7 +214,7 @@ private fun VehicleFormScreen(dao: GarageDao, existing: Vehicle?, onDone: () -> 
     }
     if (confirmDelete && existing != null) {
         ConfirmDialog("Eliminare ${existing.targa} e tutto il suo storico?", onDismiss = { confirmDelete = false }) {
-            scope.launch { dao.delete(existing); onDone() }
+            scope.launch { dao.delete(existing); docsDir(ctx, existing.id).deleteRecursively(); onDone() }
         }
     }
 }
@@ -232,10 +236,10 @@ private fun VehicleDetail(dao: GarageDao, id: Long, onBack: () -> Unit, onEdit: 
         topBar = {
             Column {
                 TopBar("${v.marca} ${v.modello}".trim(), onBack) { IconButton({ onEdit(v) }) { Icon(Icons.Default.Edit, "Modifica veicolo") } }
-                PillTabs(listOf("Riepilogo", "Scadenze", "Rifornimenti", "Spese"), tab) { tab = it }
+                PillTabs(listOf("Riepilogo", "Scadenze", "Rifornimenti", "Spese", "Documenti"), tab) { tab = it }
             }
         },
-        floatingActionButton = { if (tab > 0) AddFab(listOf("Scadenza", "Rifornimento", "Spesa")[tab - 1]) { adding = true } },
+        floatingActionButton = { if (tab in 1..3) AddFab(listOf("Scadenza", "Rifornimento", "Spesa")[tab - 1]) { adding = true } },
     ) { pad ->
         Box(Modifier.padding(pad)) {
             when (tab) {
@@ -243,6 +247,7 @@ private fun VehicleDetail(dao: GarageDao, id: Long, onBack: () -> Unit, onEdit: 
                 1 -> DeadlineList(dao, deadlines)
                 2 -> FuelList(dao, fuel)
                 3 -> ExpenseList(dao, expenses)
+                4 -> Documents(v.id)
             }
         }
     }
@@ -546,10 +551,13 @@ fun ConfirmDialog(text: String, confirm: String = "Elimina", onDismiss: () -> Un
 }
 
 @Composable
-private fun Field(value: String, onChange: (String) -> Unit, label: String, type: KeyboardType = KeyboardType.Text) {
+fun Field(
+    value: String, onChange: (String) -> Unit, label: String, type: KeyboardType = KeyboardType.Text,
+    cap: KeyboardCapitalization = KeyboardCapitalization.None,
+) {
     OutlinedTextField(
         value, onChange, label = { Text(label) }, singleLine = true, shape = RoundedCornerShape(14.dp),
-        keyboardOptions = KeyboardOptions(keyboardType = type), modifier = Modifier.fillMaxWidth(),
+        keyboardOptions = KeyboardOptions(capitalization = cap, keyboardType = type), modifier = Modifier.fillMaxWidth(),
     )
 }
 
