@@ -34,6 +34,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardCapitalization
@@ -82,7 +83,7 @@ private fun Long.date() = LocalDate.ofEpochDay(this).format(dateFmt)
 private fun Double.eur() = String.format(Locale.ITALY, "%.2f €", this)
 private fun Double.dec(digits: Int) = String.format(Locale.ITALY, "%.${digits}f", this)
 private fun Double.input() = toBigDecimal().stripTrailingZeros().toPlainString().replace('.', ',')
-private fun Int.km() = String.format(Locale.ITALY, "%,d", this)
+fun Int.km() = String.format(Locale.ITALY, "%,d", this)
 private fun today() = LocalDate.now().toEpochDay()
 
 private fun deadlineLabel(left: Long) = when {
@@ -224,6 +225,7 @@ private fun VehicleFormScreen(dao: GarageDao, existing: Vehicle?, onDone: () -> 
 // ---------- Vehicle detail ----------
 
 private val SECTIONS = listOf("Scadenze", "Rifornimenti", "Spese", "Documenti")
+private val SECTION_ICONS = listOf(R.drawable.ic_scadenze, R.drawable.ic_rifornimenti, R.drawable.ic_spese, R.drawable.ic_documenti)
 
 @Composable
 private fun VehicleDetail(dao: GarageDao, id: Long, onBack: () -> Unit, onEdit: (Vehicle) -> Unit) {
@@ -274,25 +276,14 @@ private fun Summary(v: Vehicle, deadlines: List<Deadline>, fuel: List<FuelEntry>
     val fuelCost = fuel.filter { it.data >= from }.sumOf { it.importo }
     val otherCost = expenses.filter { it.data >= from }.sumOf { it.importo }
     Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp, 4.dp, 16.dp, 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Hero {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("CONTACHILOMETRI", color = Color.White.copy(alpha = 0.7f), style = MaterialTheme.typography.labelMedium, letterSpacing = 1.5.sp)
-                    Row(verticalAlignment = Alignment.Bottom) {
-                        Text(currentKm(v, fuel, expenses).km(), style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Black, color = Color.White)
-                        Text(" km", Modifier.padding(bottom = 4.dp), color = Color.White.copy(alpha = 0.7f), style = MaterialTheme.typography.titleMedium)
-                    }
-                }
-                Plate(v.targa)
-            }
-        }
+        Hero { Odometer(currentKm(v, fuel, expenses), v.targa, Modifier.align(Alignment.CenterHorizontally)) }
 
         SECTIONS.indices.chunked(2).forEach { pair ->
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 pair.forEach { i ->
                     Surface({ goTo(i + 1) }, Modifier.weight(1f).height(52.dp), shape = RoundedCornerShape(16.dp), color = Surface1, border = BorderStroke(1.dp, Line)) {
                         Row(Modifier.padding(start = 14.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Dot(Accent)
+                            Icon(painterResource(SECTION_ICONS[i]), null, Modifier.size(22.dp), tint = Accent)
                             Text(SECTIONS[i], Modifier.weight(1f).padding(start = 10.dp), fontWeight = FontWeight.SemiBold, maxLines = 1)
                             Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = Muted)
                         }

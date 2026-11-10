@@ -23,6 +23,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -120,6 +122,36 @@ fun Hero(onClick: (() -> Unit)? = null, content: @Composable ColumnScope.() -> U
             .padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp), content = content,
     )
+}
+
+/**
+ * Speedometer-shaped odometer for the hero card: total km in the middle, plate in the opening at the bottom.
+ * The orange arc is the progress inside the current 10,000 km, since an odometer has no maximum to fill towards.
+ */
+@Composable
+fun Odometer(km: Int, targa: String, modifier: Modifier = Modifier) {
+    val orange = Color(0xFFFF7A1A) // fixed: the hero card is dark in both themes
+    Box(modifier.size(168.dp, 124.dp)) {
+        Canvas(Modifier.fillMaxSize()) {
+            val w = 8.dp.toPx()
+            val r = 76.dp.toPx()
+            val c = Offset(size.width / 2, r + w / 2)
+            val box = Size(r * 2, r * 2)
+            val stroke = Stroke(w, cap = StrokeCap.Round)
+            drawArc(Color.White.copy(alpha = 0.12f), 150f, 240f, false, c - Offset(r, r), box, style = stroke)
+            drawArc(orange, 150f, 240f * (km % 10_000) / 10_000f, false, c - Offset(r, r), box, style = stroke)
+            for (i in 0..10) {
+                val a = Math.toRadians(150.0 + i * 24)
+                val dir = Offset(kotlin.math.cos(a).toFloat(), kotlin.math.sin(a).toFloat())
+                drawLine(Color.White.copy(alpha = 0.3f), c + dir * (r - 16.dp.toPx()), c + dir * (r - 10.dp.toPx()), 1.5.dp.toPx(), StrokeCap.Round)
+            }
+        }
+        Column(Modifier.align(Alignment.TopCenter).padding(top = 30.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Text("KM", color = Color.White.copy(alpha = 0.7f), style = MaterialTheme.typography.labelMedium, letterSpacing = 1.5.sp)
+            Text(km.km(), color = Color.White, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Black, maxLines = 1)
+        }
+        Box(Modifier.align(Alignment.BottomCenter)) { Plate(targa) }
+    }
 }
 
 /** Italian licence plate: white with the two blue side bands. */
