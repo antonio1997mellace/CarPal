@@ -125,32 +125,31 @@ fun Hero(onClick: (() -> Unit)? = null, content: @Composable ColumnScope.() -> U
 }
 
 /**
- * Speedometer-shaped odometer for the hero card: total km in the middle, plate in the opening at the bottom.
+ * Half-dial odometer for the hero card, with the total km inside.
  * The orange arc is the progress inside the current 10,000 km, since an odometer has no maximum to fill towards.
  */
 @Composable
-fun Odometer(km: Int, targa: String, modifier: Modifier = Modifier) {
+fun Odometer(km: Int, modifier: Modifier = Modifier) {
     val orange = Color(0xFFFF7A1A) // fixed: the hero card is dark in both themes
-    Box(modifier.size(168.dp, 124.dp)) {
+    Box(modifier.size(152.dp, 80.dp)) {
         Canvas(Modifier.fillMaxSize()) {
             val w = 8.dp.toPx()
-            val r = 76.dp.toPx()
+            val r = 72.dp.toPx()
             val c = Offset(size.width / 2, r + w / 2)
             val box = Size(r * 2, r * 2)
             val stroke = Stroke(w, cap = StrokeCap.Round)
-            drawArc(Color.White.copy(alpha = 0.12f), 150f, 240f, false, c - Offset(r, r), box, style = stroke)
-            drawArc(orange, 150f, 240f * (km % 10_000) / 10_000f, false, c - Offset(r, r), box, style = stroke)
-            for (i in 0..10) {
-                val a = Math.toRadians(150.0 + i * 24)
+            drawArc(Color.White.copy(alpha = 0.12f), 180f, 180f, false, c - Offset(r, r), box, style = stroke)
+            drawArc(orange, 180f, 180f * (km % 10_000) / 10_000f, false, c - Offset(r, r), box, style = stroke)
+            for (i in 0..6) {
+                val a = Math.toRadians(180.0 + i * 30)
                 val dir = Offset(kotlin.math.cos(a).toFloat(), kotlin.math.sin(a).toFloat())
-                drawLine(Color.White.copy(alpha = 0.3f), c + dir * (r - 16.dp.toPx()), c + dir * (r - 10.dp.toPx()), 1.5.dp.toPx(), StrokeCap.Round)
+                drawLine(Color.White.copy(alpha = 0.3f), c + dir * (r - 12.dp.toPx()), c + dir * (r - 7.dp.toPx()), 1.5.dp.toPx(), StrokeCap.Round)
             }
         }
-        Column(Modifier.align(Alignment.TopCenter).padding(top = 30.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Column(Modifier.align(Alignment.BottomCenter), horizontalAlignment = Alignment.CenterHorizontally) {
             Text("KM", color = Color.White.copy(alpha = 0.7f), style = MaterialTheme.typography.labelMedium, letterSpacing = 1.5.sp)
-            Text(km.km(), color = Color.White, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Black, maxLines = 1)
+            Text(km.km(), color = Color.White, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Black, maxLines = 1)
         }
-        Box(Modifier.align(Alignment.BottomCenter)) { Plate(targa) }
     }
 }
 

@@ -279,7 +279,12 @@ private fun Summary(v: Vehicle, deadlines: List<Deadline>, fuel: List<FuelEntry>
     val fuelCost = fuel.filter { it.data >= from }.sumOf { it.importo }
     val otherCost = expenses.filter { it.data >= from }.sumOf { it.importo }
     Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp, 4.dp, 16.dp, 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Hero(onClick = { goTo(5) }) { Odometer(currentKm(v, fuel, expenses), v.targa, Modifier.align(Alignment.CenterHorizontally)) }
+        Hero(onClick = { goTo(5) }) {
+            Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) {
+                Odometer(currentKm(v, fuel, expenses))
+                Plate(v.targa)
+            }
+        }
 
         SECTION_ICONS.indices.chunked(2).forEach { pair ->
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
