@@ -200,7 +200,7 @@ private fun VehicleFormScreen(dao: GarageDao, existing: Vehicle?, onDone: () -> 
             Chips(FUEL_TYPES, alim) { alim = it }
             Spacer(Modifier.height(4.dp))
             BigButton("Salva", enabled = valid) {
-                val v = Vehicle(existing?.id ?: 0, targa.trim(), marca.trim(), modello.trim(), anno.toIntOrNull(), alim, km.toInt())
+                val v = Vehicle(existing?.id ?: 0, targa.trim(), marca.trim().replaceFirstChar { it.uppercase() }, modello.trim().replaceFirstChar { it.uppercase() }, anno.toIntOrNull(), alim, km.toInt())
                 scope.launch { dao.save(v); onDone() }
             }
             if (existing != null) {
