@@ -477,7 +477,10 @@ private fun ExpenseDialog(dao: GarageDao, vehicleId: Long, existing: Expense?, c
     ) {
         Chips(EXPENSE_CATEGORIES, categoria) { categoria = it }
         DateField("Data", data) { data = it }
-        if (hasDeadline) DateField("Prossima scadenza", scadenza) { scadenza = it }
+        if (hasDeadline) {
+            DateField("Prossima scadenza", scadenza) { scadenza = it }
+            if (scadenza != null) TextButton({ scadenza = null }) { Text("Togli scadenza") }
+        }
         Field(importo, { importo = it }, "Importo €", KeyboardType.Decimal)
         Field(km, { km = it }, "Km (facoltativo)", KeyboardType.Number)
         Field(note, { note = it }, "Note / officina")

@@ -1,12 +1,21 @@
-<vector xmlns:android="http://schemas.android.com/apk/res/android" xmlns:aapt="http://schemas.android.com/aapt"
+<?xml version="1.0" encoding="utf-8"?>
+<!-- White side-view car with blue wheels and a blue "done" badge (the management hint); kept inside the 66dp safe zone. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
-    <!-- Line-art car profile: body outline, two wheels and the sill segments between them, one gradient stroke. -->
-    <path
-        android:strokeWidth="3.5" android:strokeLineCap="round" android:strokeLineJoin="round"
-        android:pathData="M33,62 H27 V56 Q27,52 31,51 L40,49 L47,41 Q49,39 52,39 H64 Q67,39 69,41 L76,49 Q81,50 81,55 V62 H75 M47,62 H61 M35,62 a5,5 0 1,0 10,0 a5,5 0 1,0 -10,0 M63,62 a5,5 0 1,0 10,0 a5,5 0 1,0 -10,0">
-        <aapt:attr name="android:strokeColor">
-            <gradient android:type="linear" android:startX="27" android:startY="39" android:endX="81" android:endY="67"
-                android:startColor="#6EA8FF" android:endColor="#37E0D0" />
-        </aapt:attr>
-    </path>
+    <path android:fillColor="#FFFFFF"
+        android:pathData="M29,63 Q27,63 27,61 V57 Q27,53 31,52 L40,50 L47,42 Q49,40 52,40 H64 Q67,40 69,42 L76,50 Q81,51 81,56 V61 Q81,63 79,63 Z" />
+    <path android:fillColor="#000000"
+        android:pathData="M49,43.5 H56.5 V50 H43.5 Z M59.5,43.5 H65.5 L71,50 H59.5 Z" />
+    <path android:fillColor="#000000"
+        android:pathData="M32.5,63 a7.5,7.5 0 1,0 15,0 a7.5,7.5 0 1,0 -15,0 M60.5,63 a7.5,7.5 0 1,0 15,0 a7.5,7.5 0 1,0 -15,0" />
+    <path android:fillColor="#4F8CFF"
+        android:pathData="M35,63 a5,5 0 1,0 10,0 a5,5 0 1,0 -10,0 M63,63 a5,5 0 1,0 10,0 a5,5 0 1,0 -10,0" />
+    <path android:fillColor="#000000"
+        android:pathData="M38,63 a2,2 0 1,0 4,0 a2,2 0 1,0 -4,0 M66,63 a2,2 0 1,0 4,0 a2,2 0 1,0 -4,0" />
+    <path android:fillColor="#000000"
+        android:pathData="M62.5,36 a9.5,9.5 0 1,0 19,0 a9.5,9.5 0 1,0 -19,0" />
+    <path android:fillColor="#4F8CFF"
+        android:pathData="M65,36 a7,7 0 1,0 14,0 a7,7 0 1,0 -14,0" />
+    <path android:strokeColor="#FFFFFF" android:strokeWidth="2" android:strokeLineCap="round" android:strokeLineJoin="round"
+        android:pathData="M68.5,36.2 L71,38.7 L75.5,33.6" />
 </vector>
