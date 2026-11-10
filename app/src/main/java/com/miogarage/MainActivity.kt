@@ -38,6 +38,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -454,16 +455,29 @@ private fun ExpenseDialog(dao: GarageDao, vehicleId: Long, existing: Expense?, c
     var importo by remember { mutableStateOf(existing?.importo?.input() ?: "") }
     var km by remember { mutableStateOf(existing?.km?.toString() ?: "") }
     var note by remember { mutableStateOf(existing?.note ?: "") }
+    var scadenza by remember { mutableStateOf<Long?>(null) }
+    val hasDeadline = categoria in DEADLINE_TYPES && categoria != "Altro"
     val i = parseNum(importo)
     FormDialog(
         if (existing == null) "Nuova spesa" else "Modifica spesa",
         valid = i != null && i >= 0 && (km.isBlank() || km.toIntOrNull() != null),
         close = close,
-        save = { scope.launch { dao.save(Expense(existing?.id ?: 0, vehicleId, data, categoria, i!!, km.toIntOrNull(), note.trim())); close() } },
+        save = {
+            scope.launch {
+                dao.save(Expense(existing?.id ?: 0, vehicleId, data, categoria, i!!, km.toIntOrNull(), note.trim()))
+                scadenza?.takeIf { hasDeadline }?.let { due ->
+                    // one deadline per type: paying the renewal moves the existing one instead of adding a duplicate
+                    val old = dao.deadlines(vehicleId).first().firstOrNull { it.tipo == categoria }
+                    dao.save(Deadline(old?.id ?: 0, vehicleId, categoria, due))
+                }
+                close()
+            }
+        },
         onDelete = existing?.let { { scope.launch { dao.delete(it); close() } } },
     ) {
         Chips(EXPENSE_CATEGORIES, categoria) { categoria = it }
         DateField("Data", data) { data = it }
+        if (hasDeadline) DateField("Prossima scadenza", scadenza) { scadenza = it }
         Field(importo, { importo = it }, "Importo €", KeyboardType.Decimal)
         Field(km, { km = it }, "Km (facoltativo)", KeyboardType.Number)
         Field(note, { note = it }, "Note / officina")
@@ -559,13 +573,13 @@ fun Chips(options: List<String>, selected: String, onSelect: (String) -> Unit) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun DateField(label: String, epochDay: Long, onChange: (Long) -> Unit) {
+private fun DateField(label: String, epochDay: Long?, onChange: (Long) -> Unit) {
     var open by remember { mutableStateOf(false) }
     OutlinedButton({ open = true }, Modifier.fillMaxWidth().height(52.dp), shape = RoundedCornerShape(14.dp)) {
-        Text("$label: ${epochDay.date()}", color = Ink)
+        Text("$label: ${epochDay?.date() ?: "non impostata"}", color = Ink)
     }
     if (open) {
-        val state = rememberDatePickerState(initialSelectedDateMillis = epochDay * 86_400_000)
+        val state = rememberDatePickerState(initialSelectedDateMillis = (epochDay ?: today()) * 86_400_000)
         DatePickerDialog(
             onDismissRequest = { open = false },
             confirmButton = {
