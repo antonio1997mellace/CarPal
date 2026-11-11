@@ -81,35 +81,32 @@ fun parseStations(json: String, fuel: String): List<Station> {
     }
 }
 
-// shortcut: this is the endpoint behind the ministry's own "Osservaprezzi carburanti" site, not a documented API;
+// shortcut: this is the service behind the ministry's own "Osservaprezzi carburanti" site, not a documented API;
 // if it changes, switch to the daily open-data CSV files on mimit.gov.it.
-private suspend fun fetchStations(lat: Double, lng: Double, radiusKm: Int, fuel: String) = withContext(Dispatchers.IO) {
-    val c = URL("https://carburanti.mise.gov.it/ospzApi/search/zone").openConnection() as HttpURLConnection
+/** GET, or POST when [body] is given; returns the response text. */
+private fun ministry(path: String, body: String? = null): String {
+    val c = URL("https://carburanti.mise.gov.it/ospzApi/$path").openConnection() as HttpURLConnection
     try {
-        c.requestMethod = "POST"
         c.connectTimeout = 15_000
         c.readTimeout = 20_000
-        c.doOutput = true
-        c.setRequestProperty("Content-Type", "application/json")
-        c.outputStream.use { it.write("""{"points":[{"lat":$lat,"lng":$lng}],"radius":$radiusKm}""".toByteArray()) }
-        parseStations(c.inputStream.use { it.readBytes().decodeToString() }, fuel)
+        if (body != null) {
+            c.doOutput = true
+            c.setRequestProperty("Content-Type", "application/json")
+            c.outputStream.use { it.write(body.toByteArray()) }
+        }
+        return c.inputStream.use { it.readBytes().decodeToString() }
     } finally {
         c.disconnect()
     }
 }
 
+private suspend fun fetchStations(lat: Double, lng: Double, radiusKm: Int, fuel: String) = withContext(Dispatchers.IO) {
+    parseStations(ministry("search/zone", """{"points":[{"lat":$lat,"lng":$lng}],"radius":$radiusKm}"""), fuel)
+}
+
 /** Street address of one station; the area search does not return it, so it is asked per station. */
 private suspend fun fetchAddress(id: Int) = withContext(Dispatchers.IO) {
-    runCatching {
-        val c = URL("https://carburanti.mise.gov.it/ospzApi/registry/servicearea/$id").openConnection() as HttpURLConnection
-        try {
-            c.connectTimeout = 15_000
-            c.readTimeout = 15_000
-            JSONObject(c.inputStream.use { it.readBytes().decodeToString() }).optString("address").ifBlank { null }
-        } finally {
-            c.disconnect()
-        }
-    }.getOrNull()
+    runCatching { JSONObject(ministry("registry/servicearea/$id")).optString("address").ifBlank { null } }.getOrNull()
 }
 
 /** Name, address and distance of a station; the address is downloaded the first time the station is shown. */

@@ -57,10 +57,14 @@ private suspend fun importDoc(ctx: Context, uri: Uri, dir: File, replace: Boolea
         if ('.' !in name) MimeTypeMap.getSingleton().getExtensionFromMimeType(cr.getType(uri))?.let { name += ".$it" }
         dir.mkdirs()
         val tmp = File(dir.parentFile, ".tmp")
-        cr.openInputStream(uri)!!.use { input -> tmp.outputStream().use { input.copyTo(it) } }
-        // the old file goes only after the new one is fully copied
-        if (replace) dir.listFiles()?.forEach { it.delete() }
-        check(tmp.renameTo(File(dir, uniqueName(safeName(name), dir.list()!!.toList()))))
+        try {
+            cr.openInputStream(uri)!!.use { input -> tmp.outputStream().use { input.copyTo(it) } }
+            // the old file goes only after the new one is fully copied
+            if (replace) dir.listFiles()?.forEach { it.delete() }
+            check(tmp.renameTo(File(dir, uniqueName(safeName(name), dir.list()!!.toList()))))
+        } finally {
+            tmp.delete() // no-op after a successful rename; clears a half-copied file otherwise
+        }
     }.isSuccess
 }
 

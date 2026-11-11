@@ -44,5 +44,9 @@ fun parseBackup(text: String): Backup {
     require(ids.size == b.vehicles.size) { "duplicate vehicle ids" }
     require((b.deadlines.map { it.vehicleId } + b.fuel.map { it.vehicleId } + b.expenses.map { it.vehicleId }).all { it in ids }) { "entry without vehicle" }
     require(b.fuel.all { it.litri > 0 && it.importo >= 0 } && b.expenses.all { it.importo >= 0 }) { "invalid amounts" }
+    // out-of-range values would not corrupt the database but would crash the screens that format them
+    val days = 0L..100_000L // epoch days: 1970 to about 2243
+    require((b.deadlines.map { it.data } + b.fuel.map { it.data } + b.expenses.map { it.data }).all { it in days }) { "invalid date" }
+    require((b.vehicles.map { it.km } + b.fuel.map { it.km } + b.expenses.mapNotNull { it.km }).all { it >= 0 }) { "invalid km" }
     return b
 }

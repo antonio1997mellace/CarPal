@@ -20,5 +20,7 @@ class BackupTest {
         fails(backup.toJson().replace("MioGarage", "Other"))
         fails(backup.copy(vehicles = backup.vehicles.take(1)).toJson()) // fuel entry points at a missing vehicle
         fails(backup.copy(fuel = listOf(FuelEntry(3, 2, 20_001, 0.0, 10.0, 1))).toJson())
+        fails(backup.copy(deadlines = listOf(Deadline(7, 1, "Bollo", Long.MAX_VALUE))).toJson()) // a date no screen could format
+        fails(backup.copy(fuel = listOf(FuelEntry(3, 2, 20_001, 30.0, 10.0, -5))).toJson())
     }
 }
