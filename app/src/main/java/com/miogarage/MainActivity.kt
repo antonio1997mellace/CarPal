@@ -303,7 +303,8 @@ private fun Summary(v: Vehicle, deadlines: List<Deadline>, fuel: List<FuelEntry>
         SECTION_ICONS.indices.chunked(2).forEach { pair ->
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 pair.forEach { i ->
-                    Surface({ goTo(i + 1) }, Modifier.weight(1f).height(52.dp), shape = RoundedCornerShape(16.dp), color = Surface1, border = BorderStroke(1.dp, Line)) {
+                    // the right column holds the longer labels ("Rifornimenti"), so it gets more of the width
+                    Surface({ goTo(i + 1) }, Modifier.weight(if (i % 2 == 0) 0.85f else 1.15f).height(52.dp), shape = RoundedCornerShape(16.dp), color = Surface1, border = BorderStroke(1.dp, Line)) {
                         Row(Modifier.padding(start = 14.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                             Icon(painterResource(SECTION_ICONS[i]), null, Modifier.size(22.dp), tint = Accent)
                             Text(SECTIONS[i], Modifier.weight(1f).padding(start = 10.dp), fontWeight = FontWeight.SemiBold, maxLines = 1)

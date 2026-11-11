@@ -289,7 +289,7 @@ fun Stations(v: Vehicle) {
         Text("Per le auto elettriche non ci sono prezzi alla pompa.", Modifier.padding(24.dp), color = Muted)
         return
     }
-    val sorted = stations?.let { found -> if (order == ORDERS[0]) found.sortedBy { it.km } else found.sortedBy { it.price } }
+    val sorted = stations?.let { found -> if (order == ORDERS[0]) found.sortedBy { it.km } else found.sortedWith(compareBy({ it.price }, { it.km })) }
     LazyColumn(state = list, contentPadding = PaddingValues(16.dp, 4.dp, 16.dp, 24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         item {
             Panel {
