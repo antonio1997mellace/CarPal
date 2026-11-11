@@ -14,6 +14,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -79,12 +81,12 @@ private sealed interface Screen {
 }
 
 private val dateFmt = DateTimeFormatter.ofPattern("dd/MM/yyyy")
-private fun Long.date() = LocalDate.ofEpochDay(this).format(dateFmt)
-private fun Double.eur() = String.format(Locale.ITALY, "%.2f €", this)
-private fun Double.dec(digits: Int) = String.format(Locale.ITALY, "%.${digits}f", this)
+fun Long.date() = LocalDate.ofEpochDay(this).format(dateFmt)
+fun Double.eur() = String.format(Locale.ITALY, "%.2f €", this)
+fun Double.dec(digits: Int) = String.format(Locale.ITALY, "%.${digits}f", this)
 private fun Double.input() = toBigDecimal().stripTrailingZeros().toPlainString().replace('.', ',')
 fun Int.km() = String.format(Locale.ITALY, "%,d", this)
-private fun today() = LocalDate.now().toEpochDay()
+fun today() = LocalDate.now().toEpochDay()
 
 private fun deadlineLabel(left: Long) = when {
     left < 0 -> "scaduta da ${-left} gg"
@@ -224,7 +226,8 @@ private fun VehicleFormScreen(dao: GarageDao, existing: Vehicle?, onDone: () -> 
 
 // ---------- Vehicle detail ----------
 
-private val SECTIONS = listOf("Scadenze", "Rifornimenti", "Spese", "Documenti", "Chilometri") // the last one opens from the odometer, not from a tile
+private val SECTIONS = listOf("Scadenze", "Rifornimenti", "Spese", "Documenti", "Chilometri", "Crea PDF") // the last two open from the odometer and the PDF button, not from a tile
+private val PAGES = listOf("Riepilogo", "Ricambi", "Distributori")
 private val PERIODS = listOf("Sempre", "Settimana", "Mese", "Anno")
 // rolling periods ending today, so a figure is never empty on the 1st of the month
 private fun periodStart(period: Int, today: Long) = listOf(Long.MIN_VALUE, today - 6, today - 29, today - 364)[period]
@@ -240,24 +243,36 @@ private fun VehicleDetail(dao: GarageDao, id: Long, onBack: () -> Unit, onEdit: 
     var adding by remember { mutableStateOf(false) }
     val v = vehicle ?: return
     val lastKm = fuel.maxOfOrNull { it.km } ?: v.km
+    val pager = rememberPagerState { PAGES.size }
+    val scope = rememberCoroutineScope()
     // the summary is the landing page: back from a section returns to it, not to the garage
     BackHandler(tab != 0) { tab = 0 }
 
     Scaffold(
         topBar = {
-            if (tab == 0) TopBar("${v.marca} ${v.modello}".trim(), onBack) { IconButton({ onEdit(v) }) { Icon(Icons.Default.Edit, "Modifica veicolo") } }
+            if (tab == 0) Column {
+                TopBar("${v.marca} ${v.modello}".trim(), onBack) { IconButton({ onEdit(v) }) { Icon(Icons.Default.Edit, "Modifica veicolo") } }
+                PillTabs(PAGES, pager.currentPage, height = 36.dp) { scope.launch { pager.animateScrollToPage(it) } }
+            }
             else TopBar(SECTIONS[tab - 1], { tab = 0 })
         },
         floatingActionButton = { if (tab in 1..3) AddFab(listOf("Scadenza", "Rifornimento", "Spesa")[tab - 1]) { adding = true } },
     ) { pad ->
         Box(Modifier.padding(pad)) {
             when (tab) {
-                0 -> Summary(v, deadlines, fuel, expenses) { tab = it }
+                0 -> HorizontalPager(pager, verticalAlignment = Alignment.Top) { page ->
+                    when (page) {
+                        0 -> Summary(v, deadlines, fuel, expenses) { tab = it }
+                        1 -> Parts(v) { onEdit(v) }
+                        2 -> Stations(v)
+                    }
+                }
                 1 -> DeadlineList(dao, deadlines)
                 2 -> FuelList(dao, fuel)
                 3 -> ExpenseList(dao, expenses)
                 4 -> Documents(v.id)
                 5 -> KmHistory(v, fuel, expenses)
+                6 -> PdfSection(v, deadlines, fuel, expenses)
             }
         }
     }
@@ -279,7 +294,7 @@ private fun Summary(v: Vehicle, deadlines: List<Deadline>, fuel: List<FuelEntry>
     val fuelCost = fuel.filter { it.data >= from }.sumOf { it.importo }
     val otherCost = expenses.filter { it.data >= from }.sumOf { it.importo }
     Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp, 4.dp, 16.dp, 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Hero(onClick = { goTo(5) }) {
+        Hero(onClick = { goTo(5) }, pad = PaddingValues(20.dp, 10.dp)) {
             Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) {
                 Odometer(currentKm(v, fuel, expenses))
                 Plate(v.targa)
@@ -336,6 +351,8 @@ private fun Summary(v: Vehicle, deadlines: List<Deadline>, fuel: List<FuelEntry>
                 Legend(Modifier.weight(1f), Steel, "Altro", otherCost)
             }
         }
+
+        OutlinedButton({ goTo(6) }, Modifier.fillMaxWidth()) { Text("Crea PDF dello storico") }
     }
 }
 
@@ -568,7 +585,7 @@ private fun AddFab(text: String, onClick: () -> Unit) {
 }
 
 @Composable
-private fun BigButton(text: String, enabled: Boolean = true, onClick: () -> Unit) {
+fun BigButton(text: String, enabled: Boolean = true, onClick: () -> Unit) {
     Button(onClick, Modifier.fillMaxWidth().height(54.dp), enabled = enabled, shape = RoundedCornerShape(16.dp)) {
         Text(text, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
     }

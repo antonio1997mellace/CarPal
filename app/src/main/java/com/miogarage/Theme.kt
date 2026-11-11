@@ -110,7 +110,7 @@ fun Panel(modifier: Modifier = Modifier, onClick: (() -> Unit)? = null, content:
 
 /** Graphite card with an orange glow, used for the vehicle itself; dark in both themes. */
 @Composable
-fun Hero(onClick: (() -> Unit)? = null, content: @Composable ColumnScope.() -> Unit) {
+fun Hero(onClick: (() -> Unit)? = null, pad: PaddingValues = PaddingValues(20.dp), content: @Composable ColumnScope.() -> Unit) {
     Column(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp))
             .background(Brush.linearGradient(listOf(Color(0xFF2C2C2F), Color(0xFF111112))))
@@ -119,7 +119,7 @@ fun Hero(onClick: (() -> Unit)? = null, content: @Composable ColumnScope.() -> U
                 drawCircle(Brush.radialGradient(listOf(Color(0x59FF7A1A), Color.Transparent), c, size.height * 1.2f), size.height * 1.2f, c)
             }
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
-            .padding(20.dp),
+            .padding(pad),
         verticalArrangement = Arrangement.spacedBy(18.dp), content = content,
     )
 }
