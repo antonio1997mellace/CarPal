@@ -32,6 +32,10 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
 import java.security.MessageDigest
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
@@ -244,12 +248,13 @@ object Sync {
         }
     }
 
-    /** Uploads the changes once the phone is online, even if the app has been closed meanwhile. */
+    /** Uploads the changes once the phone is online, even if the app has been closed meanwhile. Calls made within a few seconds become one sync. */
     fun schedule(ctx: Context) {
         if (Prefs.account == null) return
         WorkManager.getInstance(ctx).enqueueUniqueWork(
             "sync", ExistingWorkPolicy.REPLACE,
-            OneTimeWorkRequestBuilder<SyncWorker>().setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()).build(),
+            OneTimeWorkRequestBuilder<SyncWorker>().setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+                .setInitialDelay(3, TimeUnit.SECONDS).build(),
         )
     }
 
@@ -325,6 +330,8 @@ fun LoginScreen(onDone: () -> Unit) {
     }
 }
 
+private val syncTime = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")
+
 /** Settings panel to sign in and out. */
 @Composable
 fun AccountPanel() {
@@ -343,6 +350,11 @@ fun AccountPanel() {
                 Button({ scope.launch { Sync.run(ctx) } }, Modifier.weight(1f), enabled = !Sync.busy) { Text("Sincronizza ora") }
                 OutlinedButton({ scope.launch { Sync.signOut(ctx) } }, Modifier.weight(1f), enabled = !Sync.busy) { Text("Esci") }
             }
+            val last = Prefs.lastSync
+            Text(
+                if (last == 0L) "Non ancora sincronizzato." else "Ultima sincronizzazione: " + syncTime.format(Instant.ofEpochMilli(last).atZone(ZoneId.systemDefault())),
+                style = MaterialTheme.typography.bodySmall,
+            )
             Text("Uscendo, i dati restano su questo telefono e nel tuo account.", color = Muted, style = MaterialTheme.typography.bodySmall)
         }
         Sync.message?.let { Text(it, style = MaterialTheme.typography.bodySmall) }

@@ -83,6 +83,10 @@ fun Documents(vehicleId: Long) {
     val files = remember(version) {
         (DOC_SLOTS + MISC).associateWith { File(root, it).listFiles()?.sortedBy { f -> f.name.lowercase() } ?: emptyList() }
     }
+    fun changed() {
+        version++
+        Sync.schedule(ctx)
+    }
     var target by rememberSaveable { mutableStateOf(MISC) }
     var toDelete by remember { mutableStateOf<File?>(null) }
     var toRename by remember { mutableStateOf<File?>(null) }
@@ -90,7 +94,7 @@ fun Documents(vehicleId: Long) {
     val pick = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) scope.launch {
             if (!importDoc(ctx, uri, File(root, target), replace = target != MISC)) Toast.makeText(ctx, "Caricamento non riuscito", Toast.LENGTH_LONG).show()
-            version++
+            changed()
         }
     }
     fun load(slot: String) {
@@ -141,7 +145,7 @@ fun Documents(vehicleId: Long) {
         ConfirmDialog("Eliminare ${f.name}?", onDismiss = { toDelete = null }) {
             f.delete()
             toDelete = null
-            version++
+            changed()
         }
     }
     toRename?.let { f ->
@@ -155,7 +159,7 @@ fun Documents(vehicleId: Long) {
                     val ext = if (f.extension.isEmpty()) "" else ".${f.extension}"
                     f.renameTo(File(f.parentFile, uniqueName(safeName(name) + ext, f.parentFile!!.list()!!.toList() - f.name)))
                     toRename = null
-                    version++
+                    changed()
                 }) { Text("Salva") }
             },
             dismissButton = { TextButton({ toRename = null }) { Text("Annulla") } },

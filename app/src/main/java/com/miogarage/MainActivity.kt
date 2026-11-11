@@ -59,6 +59,11 @@ class MainActivity : ComponentActivity() {
             registerForActivityResult(ActivityResultContracts.RequestPermission()) {}.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
         val dao = GarageDb.get(this).dao()
+        // every change is sent to the account a few seconds later, not only when the app is left
+        lifecycleScope.launch {
+            GarageDb.get(this@MainActivity).invalidationTracker.createFlow("Vehicle", "Deadline", "FuelEntry", "Expense", emitInitialState = false)
+                .collect { Sync.schedule(this@MainActivity) }
+        }
         setContent {
             GarageTheme {
                 val dark = isDark

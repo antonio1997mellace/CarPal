@@ -38,6 +38,8 @@ object Prefs {
     /** Fingerprints of this phone and of the account right after the last sync, see [decide]. */
     val syncedLocal get() = prefs.getString("syncedLocal", null)
     val syncedRemote get() = prefs.getString("syncedRemote", null)
+    var lastSync by mutableStateOf(0L) // epoch millis of the last time phone and account were found or made equal
+        private set
 
     fun load(ctx: Context) {
         prefs = ctx.getSharedPreferences("settings", Context.MODE_PRIVATE)
@@ -45,6 +47,7 @@ object Prefs {
         notifications = prefs.getBoolean("notifications", true)
         onboarded = prefs.getBoolean("onboarded", false)
         account = prefs.getString("account", null)
+        lastSync = prefs.getLong("syncedAt", 0)
     }
 
     fun onboard() {
@@ -54,16 +57,21 @@ object Prefs {
 
     fun signIn(email: String) {
         account = email
+        lastSync = 0
         // another account's history says nothing about this one
-        prefs.edit().putString("account", email).remove("syncedLocal").remove("syncedRemote").apply()
+        prefs.edit().putString("account", email).remove("syncedLocal").remove("syncedRemote").remove("syncedAt").apply()
     }
 
     fun signOut() {
         account = null
-        prefs.edit().remove("account").remove("syncedLocal").remove("syncedRemote").apply()
+        lastSync = 0
+        prefs.edit().remove("account").remove("syncedLocal").remove("syncedRemote").remove("syncedAt").apply()
     }
 
-    fun synced(local: String, remote: String) = prefs.edit().putString("syncedLocal", local).putString("syncedRemote", remote).apply()
+    fun synced(local: String, remote: String) {
+        lastSync = System.currentTimeMillis()
+        prefs.edit().putString("syncedLocal", local).putString("syncedRemote", remote).putLong("syncedAt", lastSync).apply()
+    }
 
     fun chooseTheme(value: String) {
         theme = value
