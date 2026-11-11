@@ -289,6 +289,8 @@ fun Stations(v: Vehicle) {
         Text("Per le auto elettriche non ci sono prezzi alla pompa.", Modifier.padding(24.dp), color = Muted)
         return
     }
+    // after a search bring the map to the top, so the first rows of the list show right under it
+    LaunchedEffect(stations) { if (stations != null) list.animateScrollToItem(1) }
     val sorted = stations?.let { found -> if (order == ORDERS[0]) found.sortedBy { it.km } else found.sortedWith(compareBy({ it.price }, { it.km })) }
     LazyColumn(state = list, contentPadding = PaddingValues(16.dp, 4.dp, 16.dp, 24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         item {
@@ -316,7 +318,7 @@ fun Stations(v: Vehicle) {
             // kept as item 1 so a tap on a list row can scroll back to it
             item(key = "map") {
                 // the same view comes back each time the row re-enters the list, so free it from its old holder first
-                AndroidView({ (map.parent as? android.view.ViewGroup)?.removeView(map); map }, Modifier.fillMaxWidth().height(340.dp).clip(RoundedCornerShape(20.dp)))
+                AndroidView({ (map.parent as? android.view.ViewGroup)?.removeView(map); map }, Modifier.fillMaxWidth().height(260.dp).clip(RoundedCornerShape(20.dp)))
             }
             item {
                 val s = selected
@@ -337,6 +339,7 @@ fun Stations(v: Vehicle) {
         if (loading) item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
         message?.let { item { Text(it, color = Bad) } }
         if (sorted != null && sorted.isEmpty() && !loading) item { Text("Nessun distributore di $fuel in questa zona: prova una distanza maggiore.", color = Muted) }
+        if (!sorted.isNullOrEmpty()) item { SectionTitle("Elenco: ${sorted.size} distributori, ${order.lowercase()} prima") }
         items(sorted ?: emptyList()) { s ->
             // the details open under the map, so bring the map back into view
             Panel(onClick = { select(s); scope.launch { list.animateScrollToItem(1) } }) {
