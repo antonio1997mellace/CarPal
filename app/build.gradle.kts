@@ -17,6 +17,17 @@ android {
         versionName = "0.1"
     }
 
+    // A fixed key (kept out of the repository, see signing/ and the CI secrets) so every build has the signature
+    // registered for Google sign-in; without it the default debug key is used and sign-in does not work.
+    val keystore = rootProject.file("signing/miogarage.jks")
+    if (keystore.exists()) signingConfigs.getByName("debug") {
+        val password = rootProject.file("signing/password.txt").readText().trim()
+        storeFile = keystore
+        storePassword = password
+        keyAlias = "miogarage"
+        keyPassword = password
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -34,6 +45,7 @@ dependencies {
     implementation("androidx.room:room-ktx:2.7.1")
     ksp("androidx.room:room-compiler:2.7.1")
     implementation("androidx.work:work-runtime-ktx:2.10.1")
+    implementation("com.google.android.gms:play-services-auth:22.0.0") // Google sign-in and Drive permission
     implementation("org.osmdroid:osmdroid-android:6.1.20") // OpenStreetMap view: no API key or Google account needed
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20240303") // android.jar only has org.json stubs in unit tests

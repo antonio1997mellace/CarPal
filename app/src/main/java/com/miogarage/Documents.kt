@@ -33,7 +33,7 @@ import java.io.File
 // Documents are plain files in filesDir/docs/<vehicleId>/<slot>/: the file name is the document name, so no table is needed.
 // shortcut: not included in the JSON backup and not cleaned up by a backup import; move to a zip backup if that is needed.
 val DOC_SLOTS = listOf("Libretto", "Assicurazione", "Revisione", "Patente")
-private const val MISC = "Varie"
+const val MISC = "Varie"
 
 fun docsDir(ctx: Context, vehicleId: Long) = File(ctx.filesDir, "docs/$vehicleId")
 

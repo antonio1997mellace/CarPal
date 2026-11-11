@@ -45,6 +45,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.time.LocalDate
@@ -67,9 +68,21 @@ class MainActivity : ComponentActivity() {
                     val bars = if (dark) SystemBarStyle.dark(t) else SystemBarStyle.light(t, t)
                     enableEdgeToEdge(bars, bars)
                 }
-                GarageApp(dao)
+                if (Prefs.onboarded) GarageApp(dao) else LoginScreen(Prefs::onboard)
+                SyncConflictDialog()
             }
         }
+    }
+
+    // Sync when the app comes to the front, and send the changes when it leaves.
+    override fun onStart() {
+        super.onStart()
+        lifecycleScope.launch { Sync.run(this@MainActivity) }
+    }
+
+    override fun onStop() {
+        super.onStop()
+        Sync.schedule(this)
     }
 }
 

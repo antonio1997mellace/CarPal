@@ -30,12 +30,40 @@ object Prefs {
         private set
     var notifications by mutableStateOf(true)
         private set
+    var onboarded by mutableStateOf(false) // the first-launch sign-in screen has been answered
+        private set
+    var account by mutableStateOf<String?>(null) // Google account the garage is synced with
+        private set
+
+    /** Fingerprints of this phone and of the account right after the last sync, see [decide]. */
+    val syncedLocal get() = prefs.getString("syncedLocal", null)
+    val syncedRemote get() = prefs.getString("syncedRemote", null)
 
     fun load(ctx: Context) {
         prefs = ctx.getSharedPreferences("settings", Context.MODE_PRIVATE)
         theme = prefs.getString("theme", "dark")!!
         notifications = prefs.getBoolean("notifications", true)
+        onboarded = prefs.getBoolean("onboarded", false)
+        account = prefs.getString("account", null)
     }
+
+    fun onboard() {
+        onboarded = true
+        prefs.edit().putBoolean("onboarded", true).apply()
+    }
+
+    fun signIn(email: String) {
+        account = email
+        // another account's history says nothing about this one
+        prefs.edit().putString("account", email).remove("syncedLocal").remove("syncedRemote").apply()
+    }
+
+    fun signOut() {
+        account = null
+        prefs.edit().remove("account").remove("syncedLocal").remove("syncedRemote").apply()
+    }
+
+    fun synced(local: String, remote: String) = prefs.edit().putString("syncedLocal", local).putString("syncedRemote", remote).apply()
 
     fun chooseTheme(value: String) {
         theme = value
@@ -76,6 +104,8 @@ fun SettingsScreen(dao: GarageDao, onBack: () -> Unit) {
 
     Scaffold(topBar = { TopBar("Impostazioni", onBack) }) { pad ->
         Column(Modifier.padding(pad).verticalScroll(rememberScrollState()).padding(16.dp, 8.dp, 16.dp, 24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            AccountPanel()
+
             Panel {
                 SectionTitle("Tema")
                 Chips(THEMES.map { it.first }, THEMES.first { it.second == Prefs.theme }.first) { label ->
