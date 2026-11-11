@@ -35,7 +35,6 @@ import java.security.MessageDigest
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
@@ -248,13 +247,12 @@ object Sync {
         }
     }
 
-    /** Uploads the changes once the phone is online, even if the app has been closed meanwhile. Calls made within a few seconds become one sync. */
+    /** Uploads the changes once the phone is online, even if the app has been closed meanwhile. */
     fun schedule(ctx: Context) {
         if (Prefs.account == null) return
         WorkManager.getInstance(ctx).enqueueUniqueWork(
             "sync", ExistingWorkPolicy.REPLACE,
-            OneTimeWorkRequestBuilder<SyncWorker>().setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
-                .setInitialDelay(3, TimeUnit.SECONDS).build(),
+            OneTimeWorkRequestBuilder<SyncWorker>().setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()).build(),
         )
     }
 
