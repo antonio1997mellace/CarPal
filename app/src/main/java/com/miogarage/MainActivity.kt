@@ -227,7 +227,7 @@ private fun VehicleFormScreen(dao: GarageDao, existing: Vehicle?, onDone: () -> 
 // ---------- Vehicle detail ----------
 
 private val SECTIONS = listOf("Scadenze", "Rifornimenti", "Spese", "Documenti", "Chilometri", "Crea PDF") // the last two open from the odometer and the PDF button, not from a tile
-private val PAGES = listOf("Riepilogo", "Ricambi", "Distributori")
+private val PAGES = listOf("Riepilogo", "Distributori")
 private val PERIODS = listOf("Sempre", "Settimana", "Mese", "Anno")
 // rolling periods ending today, so a figure is never empty on the 1st of the month
 private fun periodStart(period: Int, today: Long) = listOf(Long.MIN_VALUE, today - 6, today - 29, today - 364)[period]
@@ -263,8 +263,7 @@ private fun VehicleDetail(dao: GarageDao, id: Long, onBack: () -> Unit, onEdit: 
                 0 -> HorizontalPager(pager, verticalAlignment = Alignment.Top) { page ->
                     when (page) {
                         0 -> Summary(v, deadlines, fuel, expenses) { tab = it }
-                        1 -> Parts(v) { onEdit(v) }
-                        2 -> Stations(v)
+                        1 -> Stations(v)
                     }
                 }
                 1 -> DeadlineList(dao, deadlines)
@@ -352,7 +351,7 @@ private fun Summary(v: Vehicle, deadlines: List<Deadline>, fuel: List<FuelEntry>
             }
         }
 
-        OutlinedButton({ goTo(6) }, Modifier.fillMaxWidth()) { Text("Crea PDF dello storico") }
+        OutlinedButton({ goTo(6) }, Modifier.fillMaxWidth()) { Text("Crea PDF") }
     }
 }
 

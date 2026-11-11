@@ -34,6 +34,7 @@ dependencies {
     implementation("androidx.room:room-ktx:2.7.1")
     ksp("androidx.room:room-compiler:2.7.1")
     implementation("androidx.work:work-runtime-ktx:2.10.1")
+    implementation("org.osmdroid:osmdroid-android:6.1.20") // OpenStreetMap view: no API key or Google account needed
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20240303") // android.jar only has org.json stubs in unit tests
 }
