@@ -3,6 +3,13 @@ package com.miogarage
 import android.Manifest
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.Path
+import android.graphics.Typeface
+import android.graphics.drawable.BitmapDrawable
+import android.graphics.drawable.Drawable
 import android.location.Geocoder
 import android.location.LocationManager
 import android.net.Uri
@@ -40,6 +47,7 @@ import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.Locale
+import kotlin.math.ceil
 
 data class PumpPrice(val fuel: String, val price: Double, val self: Boolean)
 
@@ -100,54 +108,73 @@ private fun navigate(ctx: Context, s: Station) {
     }
 }
 
-/** OpenStreetMap view with the search position and one price label per station; tapping a label selects the station. */
-@Composable
-private fun StationMap(center: GeoPoint, stations: List<Station>, onSelect: (Station) -> Unit) {
-    AndroidView(
-        modifier = Modifier.fillMaxWidth().height(340.dp).clip(RoundedCornerShape(20.dp)),
-        factory = { ctx ->
-            Configuration.getInstance().apply {
-                userAgentValue = ctx.packageName // required by the OpenStreetMap tile servers
-                osmdroidBasePath = File(ctx.cacheDir, "osmdroid")
-                osmdroidTileCache = File(osmdroidBasePath, "tiles")
-            }
-            MapView(ctx).apply {
-                setMultiTouchControls(true)
-                // the map sits in a scrolling list: while a finger is on it, drags belong to the map
-                setOnTouchListener { v, _ -> v.parent?.requestDisallowInterceptTouchEvent(true); false }
-            }
-        },
-        update = { map ->
-            val key = center to stations
-            if (map.tag != key) { // rebuild and re-frame only for a new search, not on every recomposition
-                map.tag = key
-                map.overlays.clear()
-                map.overlays += Marker(map).apply {
-                    position = center
-                    icon = ContextCompat.getDrawable(map.context, org.osmdroid.library.R.drawable.person)
-                    setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
-                    title = "La tua posizione"
-                    setOnMarkerClickListener { _, _ -> true }
-                }
-                stations.forEach { s ->
-                    map.overlays += Marker(map).apply {
-                        position = GeoPoint(s.lat, s.lng)
-                        setTextIcon(String.format(Locale.ITALY, "%.3f", s.price))
-                        title = "${s.brand} ${price(s.price)}"
-                        setOnMarkerClickListener { _, _ -> onSelect(s); true }
-                    }
-                }
-                map.post {
-                    if (stations.isEmpty()) {
-                        map.controller.setZoom(14.0)
-                        map.controller.setCenter(center)
-                    } else map.zoomToBoundingBox(BoundingBox.fromGeoPoints(stations.map { GeoPoint(it.lat, it.lng) } + center), false, 80)
-                }
-                map.invalidate()
-            }
-        },
-        onRelease = { it.onDetach() },
-    )
+/** Orange price tag with a pointer underneath, anchored on the station. */
+private fun priceIcon(ctx: Context, label: String): Drawable {
+    val d = ctx.resources.displayMetrics.density
+    val text = Paint(Paint.ANTI_ALIAS_FLAG).apply { textSize = 15 * d; typeface = Typeface.DEFAULT_BOLD; color = 0xFF111112.toInt() }
+    val orange = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFFF7A1A.toInt() }
+    val h = 28 * d
+    val tip = 7 * d
+    val w = text.measureText(label) + 20 * d
+    val bmp = Bitmap.createBitmap(ceil(w).toInt(), ceil(h + tip).toInt(), Bitmap.Config.ARGB_8888)
+    Canvas(bmp).apply {
+        drawRoundRect(0f, 0f, w, h, h / 2, h / 2, orange)
+        drawPath(Path().apply { moveTo(w / 2 - tip, h - 1); lineTo(w / 2 + tip, h - 1); lineTo(w / 2, h + tip); close() }, orange)
+        drawText(label, 10 * d, h / 2 - (text.ascent() + text.descent()) / 2, text)
+    }
+    return BitmapDrawable(ctx.resources, bmp)
+}
+
+/** White dot with a dark ring: the position the search was made from. */
+private fun positionIcon(ctx: Context): Drawable {
+    val r = 11 * ctx.resources.displayMetrics.density
+    val bmp = Bitmap.createBitmap((r * 2).toInt(), (r * 2).toInt(), Bitmap.Config.ARGB_8888)
+    Canvas(bmp).apply {
+        drawCircle(r, r, r, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF111112.toInt() })
+        drawCircle(r, r, r * 0.62f, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFFFFFFF.toInt() })
+    }
+    return BitmapDrawable(ctx.resources, bmp)
+}
+
+private fun newMap(ctx: Context): MapView {
+    Configuration.getInstance().apply {
+        userAgentValue = ctx.packageName // required by the OpenStreetMap tile servers
+        osmdroidBasePath = File(ctx.cacheDir, "osmdroid")
+        osmdroidTileCache = File(osmdroidBasePath, "tiles")
+    }
+    return MapView(ctx).apply {
+        setMultiTouchControls(true)
+        // the map sits in a scrolling list: while a finger is on it, drags belong to the map
+        setOnTouchListener { v, _ -> v.parent?.requestDisallowInterceptTouchEvent(true); false }
+    }
+}
+
+/** Puts the search position and one price tag per station on [map], then frames them all. */
+private fun showStations(map: MapView, center: GeoPoint, stations: List<Station>, onSelect: (Station) -> Unit) {
+    map.overlays.clear()
+    map.overlays += Marker(map).apply {
+        position = center
+        icon = positionIcon(map.context)
+        setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
+        setOnMarkerClickListener { _, _ -> true }
+    }
+    stations.forEach { s ->
+        map.overlays += Marker(map).apply {
+            position = GeoPoint(s.lat, s.lng)
+            icon = priceIcon(map.context, String.format(Locale.ITALY, "%.3f", s.price))
+            setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+            setOnMarkerClickListener { _, _ -> onSelect(s); true }
+        }
+    }
+    fun frame() {
+        if (stations.isEmpty()) {
+            map.controller.setZoom(14.0)
+            map.controller.setCenter(center)
+        } else map.zoomToBoundingBox(BoundingBox.fromGeoPoints(stations.map { GeoPoint(it.lat, it.lng) } + center), false, 100)
+    }
+    // framing needs the real size: on a map that has not been laid out yet it computes a broken zoom and the app hangs
+    if (map.width > 0) frame() else map.addOnFirstLayoutListener { _, _, _, _, _ -> frame() }
+    map.invalidate()
 }
 
 private val RADII = listOf("1 km", "3 km", "5 km", "10 km")
@@ -168,12 +195,25 @@ fun Stations(v: Vehicle) {
     var stations by remember { mutableStateOf<List<Station>?>(null) }
     var center by remember { mutableStateOf<GeoPoint?>(null) }
     var selected by remember { mutableStateOf<Station?>(null) }
+    // one map for the whole tab: the list disposes rows that scroll away, and a fresh MapView each time is what froze the app
+    val map = remember { newMap(ctx) }
+    DisposableEffect(Unit) { onDispose { map.onDetach() } }
+
+    fun select(s: Station) {
+        selected = s
+        map.controller.animateTo(GeoPoint(s.lat, s.lng))
+    }
 
     fun search(lat: Double, lng: Double) = scope.launch {
         loading = true
         message = null
         runCatching { fetchStations(lat, lng, radius.substringBefore(' ').toInt(), fuel!!) }.fold(
-            { stations = it; center = GeoPoint(lat, lng); selected = null },
+            {
+                stations = it
+                center = GeoPoint(lat, lng)
+                selected = null
+                showStations(map, GeoPoint(lat, lng), it, ::select)
+            },
             { message = "Non riesco a scaricare i prezzi. Controlla la connessione e riprova." },
         )
         loading = false
@@ -240,7 +280,10 @@ fun Stations(v: Vehicle) {
         val c = center
         if (c != null && sorted != null) {
             // kept as item 1 so a tap on a list row can scroll back to it
-            item(key = "map") { StationMap(c, sorted) { selected = it } }
+            item(key = "map") {
+                // the same view comes back each time the row re-enters the list, so free it from its old holder first
+                AndroidView({ (map.parent as? android.view.ViewGroup)?.removeView(map); map }, Modifier.fillMaxWidth().height(340.dp).clip(RoundedCornerShape(20.dp)))
+            }
             item {
                 val s = selected
                 if (s == null) {
@@ -266,7 +309,7 @@ fun Stations(v: Vehicle) {
         if (sorted != null && sorted.isEmpty() && !loading) item { Text("Nessun distributore di $fuel in questa zona: prova una distanza maggiore.", color = Muted) }
         items(sorted ?: emptyList()) { s ->
             // the details open under the map, so bring the map back into view
-            Panel(onClick = { selected = s; scope.launch { list.animateScrollToItem(1) } }) {
+            Panel(onClick = { select(s); scope.launch { list.animateScrollToItem(1) } }) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text(s.brand.ifBlank { s.name }, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
