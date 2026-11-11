@@ -119,7 +119,7 @@ private fun StationText(s: Station, addresses: MutableMap<Int, String>) {
     Text(s.name.ifBlank { s.brand }, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
     Text(addresses[s.id] ?: "…", color = Muted, style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
     // "PompeBianche" is how the ministry labels independent stations with no oil-company brand
-    val brand = if (s.brand == "PompeBianche") "Pompa bianca (indipendente)" else s.brand
+    val brand = if (s.brand == "PompeBianche") "Indipendente" else s.brand
     Text(
         listOf(String.format(Locale.ITALY, "%.1f km", s.km), brand).filter { it.isNotBlank() }.joinToString(" · "),
         color = Muted, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis,
