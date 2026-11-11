@@ -144,6 +144,8 @@ private fun newMap(ctx: Context): MapView {
     }
     return MapView(ctx).apply {
         setMultiTouchControls(true)
+        // by default the map destroys its tiles and markers whenever its list row scrolls away; we detach it ourselves on exit
+        setDestroyMode(false)
         // the map sits in a scrolling list: while a finger is on it, drags belong to the map
         setOnTouchListener { v, _ -> v.parent?.requestDisallowInterceptTouchEvent(true); false }
     }
@@ -272,7 +274,10 @@ fun Stations(v: Vehicle) {
                     ) { Text("Dove sono io") }
                 }
                 SectionTitle("Distanza massima")
-                Chips(RADII, radius) { radius = it }
+                Chips(RADII, radius) {
+                    radius = it
+                    center?.let { c -> search(c.latitude, c.longitude) } // same place, new distance
+                }
                 SectionTitle("Ordina per")
                 Chips(ORDERS, order) { order = it }
             }
