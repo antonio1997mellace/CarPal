@@ -18,6 +18,7 @@ import androidx.work.*
 import com.google.android.gms.auth.api.identity.AuthorizationRequest
 import com.google.android.gms.auth.api.identity.Identity
 import com.google.android.gms.auth.api.identity.RevokeAccessRequest
+import com.google.android.gms.common.api.ApiException
 import com.google.android.gms.common.api.Scope
 import com.google.android.gms.tasks.Task
 import kotlinx.coroutines.Dispatchers
@@ -256,11 +257,18 @@ object Sync {
         )
     }
 
-    /** Completes a sign-in from the access [token] Google returned; false when there is none. */
-    suspend fun connect(ctx: Context, token: String?): Boolean {
-        val email = token?.let { runCatching { withContext(Dispatchers.IO) { Drive(it).email() } }.getOrNull() }
+    /** Completes a sign-in from the access [token] Google returned; false when there is none ([error] says why). */
+    suspend fun connect(ctx: Context, token: String?, error: Throwable? = null): Boolean {
+        val read = token?.let { runCatching { withContext(Dispatchers.IO) { Drive(it).email() } } }
+        val email = read?.getOrNull()
         if (email == null) {
-            message = "Accesso non riuscito."
+            // the technical reason is shown because the causes (account not allowed, old Play services, no network) need different fixes
+            val why = when (val e = error ?: read?.exceptionOrNull()) {
+                null -> "nessuna autorizzazione ricevuta"
+                is ApiException -> "codice ${e.statusCode}"
+                else -> "${e.javaClass.simpleName}: ${e.message?.take(90)}"
+            }
+            message = "Accesso non riuscito ($why)."
             return false
         }
         Prefs.signIn(email)
@@ -294,14 +302,15 @@ fun rememberGoogleSignIn(onDone: (Boolean) -> Unit): () -> Unit {
     val scope = rememberCoroutineScope()
     val client = remember { Identity.getAuthorizationClient(ctx) }
     val consent = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
-        val token = runCatching { client.getAuthorizationResultFromIntent(result.data).accessToken }.getOrNull() // throws when the user cancels
-        scope.launch { onDone(Sync.connect(ctx, token)) }
+        val r = runCatching { client.getAuthorizationResultFromIntent(result.data).accessToken } // throws when the user cancels
+        scope.launch { onDone(Sync.connect(ctx, r.getOrNull(), r.exceptionOrNull())) }
     }
     return {
         scope.launch {
-            val r = runCatching { client.authorize(authRequest(null)).await() }.getOrNull()
-            val ask = r?.pendingIntent
-            if (ask != null) consent.launch(IntentSenderRequest.Builder(ask.intentSender).build()) else onDone(Sync.connect(ctx, r?.accessToken))
+            val r = runCatching { client.authorize(authRequest(null)).await() }
+            val ask = r.getOrNull()?.pendingIntent
+            if (ask != null) consent.launch(IntentSenderRequest.Builder(ask.intentSender).build())
+            else onDone(Sync.connect(ctx, r.getOrNull()?.accessToken, r.exceptionOrNull()))
         }
     }
 }
