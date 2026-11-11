@@ -53,7 +53,7 @@ data class PumpPrice(val fuel: String, val price: Double, val self: Boolean)
 
 /** [price] and [self] are the cheapest offer for the vehicle's fuel; [prices] is everything the station sells. */
 data class Station(
-    val name: String, val brand: String, val lat: Double, val lng: Double, val km: Double,
+    val id: Int, val name: String, val brand: String, val lat: Double, val lng: Double, val km: Double,
     val price: Double, val self: Boolean, val prices: List<PumpPrice>,
 )
 
@@ -75,7 +75,7 @@ fun parseStations(json: String, fuel: String): List<Station> {
         val best = prices.filter { it.fuel == fuel }.minByOrNull { it.price } ?: return@mapNotNull null
         val loc = s.getJSONObject("location")
         Station(
-            s.optString("name"), s.optString("brand"), loc.getDouble("lat"), loc.getDouble("lng"),
+            s.optInt("id"), s.optString("name"), s.optString("brand"), loc.getDouble("lat"), loc.getDouble("lng"),
             s.optString("distance").toDoubleOrNull() ?: 0.0, best.price, best.self, prices.sortedWith(compareBy({ it.fuel }, { it.price })),
         )
     }
@@ -96,6 +96,34 @@ private suspend fun fetchStations(lat: Double, lng: Double, radiusKm: Int, fuel:
     } finally {
         c.disconnect()
     }
+}
+
+/** Street address of one station; the area search does not return it, so it is asked per station. */
+private suspend fun fetchAddress(id: Int) = withContext(Dispatchers.IO) {
+    runCatching {
+        val c = URL("https://carburanti.mise.gov.it/ospzApi/registry/servicearea/$id").openConnection() as HttpURLConnection
+        try {
+            c.connectTimeout = 15_000
+            c.readTimeout = 15_000
+            JSONObject(c.inputStream.use { it.readBytes().decodeToString() }).optString("address").ifBlank { null }
+        } finally {
+            c.disconnect()
+        }
+    }.getOrNull()
+}
+
+/** Name, address and distance of a station; the address is downloaded the first time the station is shown. */
+@Composable
+private fun StationText(s: Station, addresses: MutableMap<Int, String>) {
+    LaunchedEffect(s.id) { if (s.id !in addresses) fetchAddress(s.id)?.let { addresses[s.id] = it } }
+    Text(s.name.ifBlank { s.brand }, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    Text(addresses[s.id] ?: "…", color = Muted, style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+    // "PompeBianche" is how the ministry labels independent stations with no oil-company brand
+    val brand = if (s.brand == "PompeBianche") "Pompa bianca (indipendente)" else s.brand
+    Text(
+        listOf(String.format(Locale.ITALY, "%.1f km", s.km), brand).filter { it.isNotBlank() }.joinToString(" · "),
+        color = Muted, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis,
+    )
 }
 
 private fun price(p: Double) = String.format(Locale.ITALY, "%.3f €", p)
@@ -197,6 +225,7 @@ fun Stations(v: Vehicle) {
     var stations by remember { mutableStateOf<List<Station>?>(null) }
     var center by remember { mutableStateOf<GeoPoint?>(null) }
     var selected by remember { mutableStateOf<Station?>(null) }
+    val addresses = remember { mutableStateMapOf<Int, String>() }
     // one map for the whole tab: the list disposes rows that scroll away, and a fresh MapView each time is what froze the app
     val map = remember { newMap(ctx) }
     DisposableEffect(Unit) { onDispose { map.onDetach() } }
@@ -294,11 +323,7 @@ fun Stations(v: Vehicle) {
                 if (s == null) {
                     Text("Tocca un prezzo sulla mappa per vedere tutti i carburanti. Mappa © OpenStreetMap.", color = Muted, style = MaterialTheme.typography.bodySmall)
                 } else Panel {
-                    Text(s.brand.ifBlank { s.name }, fontWeight = FontWeight.SemiBold)
-                    Text(
-                        listOf(s.name, String.format(Locale.ITALY, "%.1f km", s.km)).filter { it.isNotBlank() }.joinToString(" · "),
-                        color = Muted, style = MaterialTheme.typography.bodySmall,
-                    )
+                    StationText(s, addresses)
                     s.prices.forEach { p ->
                         Row {
                             Text("${p.fuel} · ${if (p.self) "self" else "servito"}", Modifier.weight(1f), color = if (p.fuel == fuel) Ink else Muted)
@@ -316,13 +341,7 @@ fun Stations(v: Vehicle) {
             // the details open under the map, so bring the map back into view
             Panel(onClick = { select(s); scope.launch { list.animateScrollToItem(1) } }) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text(s.brand.ifBlank { s.name }, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text(
-                            listOf(s.name, String.format(Locale.ITALY, "%.1f km", s.km)).filter { it.isNotBlank() }.joinToString(" · "),
-                            color = Muted, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                        )
-                    }
+                    Column(Modifier.weight(1f).padding(end = 12.dp)) { StationText(s, addresses) }
                     Column(horizontalAlignment = Alignment.End) {
                         Text(price(s.price), color = Accent, fontWeight = FontWeight.ExtraBold)
                         Text(if (s.self) "self" else "servito", color = Muted, style = MaterialTheme.typography.bodySmall)
