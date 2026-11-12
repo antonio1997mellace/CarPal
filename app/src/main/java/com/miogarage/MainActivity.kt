@@ -309,10 +309,6 @@ private fun Summary(v: Vehicle, deadlines: List<Deadline>, fuel: List<FuelEntry>
     val today = today()
     val series = remember(fuel) { consumptionSeries(fuel).map { it.second }.takeLast(12) }
     val avg = avgKmPerLiter(fuel)
-    var period by rememberSaveable { mutableIntStateOf(0) }
-    val from = periodStart(period, today)
-    val fuelCost = fuel.filter { it.data >= from }.sumOf { it.importo }
-    val otherCost = expenses.filter { it.data >= from }.sumOf { it.importo }
     Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp, 4.dp, 16.dp, 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Hero(onClick = { goTo(5) }, pad = PaddingValues(20.dp, 10.dp)) {
             Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) {
@@ -359,18 +355,7 @@ private fun Summary(v: Vehicle, deadlines: List<Deadline>, fuel: List<FuelEntry>
             }
         }
 
-        Panel(onClick = { goTo(3) }) {
-            SectionTitle(listOf("Costo totale", "Costo degli ultimi 7 giorni", "Costo degli ultimi 30 giorni", "Costo degli ultimi 12 mesi")[period])
-            PillTabs(PERIODS, period, Modifier, Surface2, 36.dp) { period = it }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text((fuelCost + otherCost).eur(), Modifier.weight(1f), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold)
-                // €/km needs the km driven, which is only known over the whole history
-                if (period == 0) costPerKm(v, fuel, expenses)?.let { Pill("${it.dec(3)} €/km", Accent) }
-            }
-            CostSplit(fuelCost, otherCost)
-        }
-
-        MonthlyCosts(fuel, expenses, today)
+        CostsPanel(v, fuel, expenses, today)
 
         OutlinedButton({ goTo(6) }, Modifier.fillMaxWidth()) { Text("Crea PDF") }
     }
@@ -387,27 +372,72 @@ private fun CostSplit(fuelCost: Double, otherCost: Double) {
 
 private val monthFmt = DateTimeFormatter.ofPattern("LLLL yyyy", Locale.ITALY)
 
-/** Costs of one calendar month, with arrows to walk back to the month of the oldest entry. */
+private class CostRow(val data: Long, val title: String, val note: String, val importo: Double)
+
+/** Total cost over a rolling period, then calendar month by month (back to the oldest entry) with the list of that month's entries. */
 @Composable
-private fun MonthlyCosts(fuel: List<FuelEntry>, expenses: List<Expense>, today: Long) {
+private fun CostsPanel(v: Vehicle, fuel: List<FuelEntry>, expenses: List<Expense>, today: Long) {
+    var period by rememberSaveable { mutableIntStateOf(0) }
+    val from = periodStart(period, today)
+    val fuelCost = fuel.filter { it.data >= from }.sumOf { it.importo }
+    val otherCost = expenses.filter { it.data >= from }.sumOf { it.importo }
+
     var back by rememberSaveable { mutableIntStateOf(0) }
+    var details by rememberSaveable { mutableStateOf(false) }
     val oldest = (fuel.map { it.data } + expenses.map { it.data }).minOrNull() ?: today
     val maxBack = ChronoUnit.MONTHS.between(YearMonth.from(LocalDate.ofEpochDay(oldest)), YearMonth.from(LocalDate.ofEpochDay(today))).toInt()
     val days = monthRange(today, back)
-    val fuelCost = fuel.filter { it.data in days }.sumOf { it.importo }
-    val otherCost = expenses.filter { it.data in days }.sumOf { it.importo }
+    val month = LocalDate.ofEpochDay(days.first).format(monthFmt).replaceFirstChar { it.uppercase() }
+    val monthFuel = fuel.filter { it.data in days }
+    val monthOther = expenses.filter { it.data in days }
+    val monthFuelCost = monthFuel.sumOf { it.importo }
+    val monthOtherCost = monthOther.sumOf { it.importo }
+
     Panel {
-        SectionTitle("Storico mensile dei costi")
+        Text("Costi", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+        SectionTitle(listOf("Costo totale", "Costo degli ultimi 7 giorni", "Costo degli ultimi 30 giorni", "Costo degli ultimi 12 mesi")[period])
+        PillTabs(PERIODS, period, Modifier, Surface2, 36.dp) { period = it }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text((fuelCost + otherCost).eur(), Modifier.weight(1f), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold)
+            // €/km needs the km driven, which is only known over the whole history
+            if (period == 0) costPerKm(v, fuel, expenses)?.let { Pill("${it.dec(3)} €/km", Accent) }
+        }
+        CostSplit(fuelCost, otherCost)
+
+        HorizontalDivider(Modifier.padding(vertical = 6.dp), color = Line)
+
+        SectionTitle("Mese per mese")
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton({ back++ }, enabled = back < maxBack) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, "Mese precedente") }
-            Text(
-                LocalDate.ofEpochDay(days.first).format(monthFmt).replaceFirstChar { it.uppercase() },
-                Modifier.weight(1f), textAlign = TextAlign.Center, fontWeight = FontWeight.SemiBold,
-            )
+            Text(month, Modifier.weight(1f), textAlign = TextAlign.Center, fontWeight = FontWeight.SemiBold)
             IconButton({ back-- }, enabled = back > 0) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, "Mese successivo") }
         }
-        Text((fuelCost + otherCost).eur(), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold)
-        CostSplit(fuelCost, otherCost)
+        Text((monthFuelCost + monthOtherCost).eur(), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold)
+        CostSplit(monthFuelCost, monthOtherCost)
+        OutlinedButton({ details = true }, Modifier.fillMaxWidth(), enabled = monthFuel.isNotEmpty() || monthOther.isNotEmpty()) { Text("Vedi le spese del mese") }
+    }
+
+    if (details) {
+        val rows = (monthFuel.map { CostRow(it.data, "Rifornimento", "${it.litri.dec(2)} l", it.importo) } +
+            monthOther.map { CostRow(it.data, it.categoria, it.note, it.importo) }).sortedByDescending { it.data }
+        AlertDialog(
+            onDismissRequest = { details = false },
+            title = { Text(month) },
+            text = {
+                LazyColumn(Modifier.heightIn(max = 420.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    items(rows) { r ->
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text(r.title, color = Ink, fontWeight = FontWeight.SemiBold)
+                                Text(listOf(r.data.date(), r.note).filter { it.isNotBlank() }.joinToString(" · "), color = Muted, style = MaterialTheme.typography.bodySmall)
+                            }
+                            Text(r.importo.eur(), Modifier.padding(start = 12.dp), color = Ink, fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+                }
+            },
+            confirmButton = { TextButton({ details = false }) { Text("Chiudi") } },
+        )
     }
 }
 
