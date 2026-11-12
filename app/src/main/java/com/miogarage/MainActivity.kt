@@ -23,6 +23,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Edit
@@ -49,7 +50,9 @@ import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.time.LocalDate
+import java.time.YearMonth
 import java.time.format.DateTimeFormatter
+import java.time.temporal.ChronoUnit
 import java.util.Locale
 
 class MainActivity : ComponentActivity() {
@@ -364,14 +367,47 @@ private fun Summary(v: Vehicle, deadlines: List<Deadline>, fuel: List<FuelEntry>
                 // €/km needs the km driven, which is only known over the whole history
                 if (period == 0) costPerKm(v, fuel, expenses)?.let { Pill("${it.dec(3)} €/km", Accent) }
             }
-            SplitBar(fuelCost, otherCost)
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Legend(Modifier.weight(1f), Accent, "Carburante", fuelCost)
-                Legend(Modifier.weight(1f), Steel, "Altro", otherCost)
-            }
+            CostSplit(fuelCost, otherCost)
         }
 
+        MonthlyCosts(fuel, expenses, today)
+
         OutlinedButton({ goTo(6) }, Modifier.fillMaxWidth()) { Text("Crea PDF") }
+    }
+}
+
+@Composable
+private fun CostSplit(fuelCost: Double, otherCost: Double) {
+    SplitBar(fuelCost, otherCost)
+    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Legend(Modifier.weight(1f), Accent, "Carburante", fuelCost)
+        Legend(Modifier.weight(1f), Steel, "Altro", otherCost)
+    }
+}
+
+private val monthFmt = DateTimeFormatter.ofPattern("LLLL yyyy", Locale.ITALY)
+
+/** Costs of one calendar month, with arrows to walk back to the month of the oldest entry. */
+@Composable
+private fun MonthlyCosts(fuel: List<FuelEntry>, expenses: List<Expense>, today: Long) {
+    var back by rememberSaveable { mutableIntStateOf(0) }
+    val oldest = (fuel.map { it.data } + expenses.map { it.data }).minOrNull() ?: today
+    val maxBack = ChronoUnit.MONTHS.between(YearMonth.from(LocalDate.ofEpochDay(oldest)), YearMonth.from(LocalDate.ofEpochDay(today))).toInt()
+    val days = monthRange(today, back)
+    val fuelCost = fuel.filter { it.data in days }.sumOf { it.importo }
+    val otherCost = expenses.filter { it.data in days }.sumOf { it.importo }
+    Panel {
+        SectionTitle("Storico mensile dei costi")
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconButton({ back++ }, enabled = back < maxBack) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, "Mese precedente") }
+            Text(
+                LocalDate.ofEpochDay(days.first).format(monthFmt).replaceFirstChar { it.uppercase() },
+                Modifier.weight(1f), textAlign = TextAlign.Center, fontWeight = FontWeight.SemiBold,
+            )
+            IconButton({ back-- }, enabled = back > 0) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, "Mese successivo") }
+        }
+        Text((fuelCost + otherCost).eur(), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold)
+        CostSplit(fuelCost, otherCost)
     }
 }
 

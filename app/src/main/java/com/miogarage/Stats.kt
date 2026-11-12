@@ -75,3 +75,9 @@ fun packRows(widths: List<Int>, max: Int, gap: Int): List<List<Int>> {
     }
     return rows
 }
+
+/** First and last epoch day of the calendar month [back] months before the one containing [today]. */
+fun monthRange(today: Long, back: Int): LongRange {
+    val m = java.time.YearMonth.from(java.time.LocalDate.ofEpochDay(today)).minusMonths(back.toLong())
+    return m.atDay(1).toEpochDay()..m.atEndOfMonth().toEpochDay()
+}

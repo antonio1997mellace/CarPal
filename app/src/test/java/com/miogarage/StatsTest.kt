@@ -59,4 +59,12 @@ class StatsTest {
         assertEquals(1.5, parseNum(" 1,5 ")!!, 1e-9)
         assertNull(parseNum("abc"))
     }
+
+    @Test
+    fun monthRangeCoversWholeCalendarMonths() {
+        fun day(y: Int, m: Int, d: Int) = java.time.LocalDate.of(y, m, d).toEpochDay()
+        assertEquals(day(2026, 11, 1)..day(2026, 11, 30), monthRange(day(2026, 11, 12), 0))
+        assertEquals(day(2024, 2, 1)..day(2024, 2, 29), monthRange(day(2024, 3, 31), 1)) // leap February
+        assertEquals(day(2025, 12, 1)..day(2025, 12, 31), monthRange(day(2026, 1, 5), 1)) // across the year
+    }
 }
